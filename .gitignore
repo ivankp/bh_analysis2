@@ -1,0 +1,20 @@
+# Compilation output
+/bin
+/.build
+
+# Computation output
+/out
+/*.root
+/*.pdf
+/*.out
+/*.err
+
+# Input files
+/data
+/ntuples
+
+# vim
+.*.swp
+
+# tests and work in progress
+/test*

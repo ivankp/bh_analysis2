@@ -33,6 +33,13 @@ using std::endl;
 
 using p4_t = Float_t;
 
+struct hist_bin {
+  double w;
+  size_t n;
+  hist_bin(): w(0.), n(0) { }
+  inline void operator+=(double weight) { w += weight; ++n; }
+};
+
 struct ntuple_filler {
   static double weight;
   template <typename T>
@@ -40,11 +47,22 @@ struct ntuple_filler {
 };
 double ntuple_filler::weight;
 
-// template <size_t N>
-using hist_t = ivanp::binner<double,
+using hist_t = ivanp::binner<hist_bin,
   std::tuple<ivanp::axis_spec<ivanp::uniform_axis<double>>>,
-  std::vector<double>,
+  std::vector<hist_bin>,
   ntuple_filler>;
+
+TH1D* root_hist(const hist_t& h, const char* name) {
+  TH1D* h1 = new TH1D(name,"",h.axis().nbins(),h.axis().min(),h.axis().max());
+  const auto& bins = h.bins();
+  size_t n_total = 0;
+  for (int i=0, n=bins.size(); i<n; ++i) {
+    h1->SetBinContent(i,bins[i].w);
+    n_total += bins[i].n;
+  }
+  h1->SetEntries(n_total);
+  return h1;
+}
 
 int main(int argc, char* argv[])
 {
@@ -60,11 +78,11 @@ int main(int argc, char* argv[])
   // ================================================================
 
   // Open input ntuple root file
-  auto file = std::make_unique<TFile>(argv[1],"read");
-  if (file->IsZombie()) return 1;
+  auto fin = std::make_unique<TFile>(argv[1],"read");
+  if (fin->IsZombie()) return 1;
 
   // Set up branches for reading
-  TTreeReader reader("t3",file.get());
+  TTreeReader reader("t3",fin.get());
   if (!reader.GetTree()) {
     cerr << "\033[31mNo tree \"t3\" in file"
          << argv[1] <<"\033[0m"<< endl;
@@ -80,10 +98,10 @@ int main(int argc, char* argv[])
   TTreeReaderArray<p4_t>  _E (reader,"E");
   TTreeReaderValue<Double_t> _weight(reader,"weight");
   boost::optional<TTreeReaderValue<Int_t>> _ncount;
-  boost::optional<TTreeReaderValue<Char_t>> _part;
+  // boost::optional<TTreeReaderValue<Char_t>> _part;
   for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
     if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
-    else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
+    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
   }
 
   std::vector<fastjet::PseudoJet> particles;
@@ -142,10 +160,18 @@ int main(int argc, char* argv[])
   // ****************************************************************
 
   test(N)
-  for (auto x : h_H_pT.bins()) cout << x << endl;
 
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
+
+  // Open input ntuple root file
+  auto fout = std::make_unique<TFile>(argv[2],"recreate");
+  if (fout->IsZombie()) return 1;
+
+  // write root historgrams
+  root_hist(h_H_pT,"H_pT");
+
+  fout->Write();
 
   return 0;
 }

@@ -11,8 +11,8 @@ FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
 FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
-C_hist_Hjets_mtop_study := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_hist_Hjets_mtop_study := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
 SRC := src
 BIN := bin

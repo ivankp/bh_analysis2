@@ -5,6 +5,8 @@
 
 #include <cmath>
 
+namespace ivanp {
+
 template <typename T> [[ gnu::const ]]
 constexpr T sq(T x) noexcept { return x*x; }
 template <typename T, typename... TT> [[ gnu::const ]]
@@ -16,6 +18,8 @@ template <typename T>
   T _dphi = phi1 - phi2;
   if (__builtin_expect(_dphi < 0.,0)) _dphi = -_dphi;
   return ( __builtin_expect(_dphi > M_PI,0) ? M_2_PI-_dphi : _dphi );
+}
+
 }
 
 #endif

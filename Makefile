@@ -1,6 +1,6 @@
 STD := -std=c++14
-DF := $(STD)
-CF := $(STD) -Wall -O3 -fmax-errors=3 -flto
+DF := $(STD) -Isrc
+CF := $(STD) -Wall -O3 -fmax-errors=3 -flto -Isrc
 LF := $(STD) -flto
 
 # ROOT_CFLAGS := $(shell root-config --cflags)
@@ -13,6 +13,9 @@ FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
 C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+
+C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_hist_Hjets_mtop := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
 SRC := src
 BIN := bin

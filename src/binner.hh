@@ -120,6 +120,19 @@ public:
   binner(typename Ax::axis... axes)
   : _axes{std::forward<typename Ax::axis>(axes)...}, _bins{} { }
 
+  binner(const binner& o): _axes(o._axes), _bins(o._bins) { }
+  binner(binner&& o): _axes(std::move(o._axes)), _bins(std::move(o._bins)) { }
+  binner& operator=(const binner& o) {
+    _axes = o._axes;
+    _bins = o._bins;
+    return *this;
+  }
+  binner& operator=(binner&& o) {
+    _axes = std::move(o._axes);
+    _bins = std::move(o._bins);
+    return *this;
+  }
+
   template <unsigned I=0>
   constexpr const axis_type<I>& axis() const noexcept {
     return std::get<I>(_axes);

@@ -36,7 +36,7 @@ public:
   template <unsigned I>
   using axis_type = typename axis_spec<I>::axis;
   template <unsigned I>
-  using edge_type = typename axis_type<I>::edge_type;
+  using edge_type = typename std::decay_t<axis_type<I>>::edge_type;
   using container_type = Container;
   using filler_type = Filler;
   using value_type = typename container_type::value_type;
@@ -108,7 +108,7 @@ private:
   const noexcept { return index_impl(std::get<I>(ia)...); }
 
 public:
-  binner() = delete;
+  binner() = default;
   ~binner() = default;
 
   template <typename C=container_type,

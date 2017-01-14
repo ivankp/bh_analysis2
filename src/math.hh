@@ -5,7 +5,7 @@
 
 #include <cmath>
 
-namespace ivanp {
+namespace ivanp { namespace math {
 
 template <typename T> [[ gnu::const ]]
 constexpr T sq(T x) noexcept { return x*x; }
@@ -22,6 +22,11 @@ inline T dphi(T phi1, T phi2) noexcept {
   return ( __builtin_expect(_dphi > M_PI,0) ? twopi-_dphi : _dphi );
 }
 
-}
+template <typename T1, typename T2>
+inline void smaller(T1& x, const T2& y) noexcept { if (y < x) x = y; }
+template <typename T1, typename T2>
+inline void larger (T1& x, const T2& y) noexcept { if (x < y) x = y; }
+
+}}
 
 #endif

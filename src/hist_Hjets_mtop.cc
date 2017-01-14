@@ -115,6 +115,7 @@ int main(int argc, char* argv[])
   size_t N = 0, num_events = 0, num_selected = 0;
 
   axis axis_y(36,-4.5,4.5);
+  axis axis_absy(36,0,9);
   axis axis_phi(36,-M_PI,M_PI);
 
   hist<int> h_Njets_incl({4,0,4}), h_Njets_excl({4,0,4});
@@ -132,8 +133,8 @@ int main(int argc, char* argv[])
 
   hist<double>
     h_jjpT_dpT ({100,-300,300}), h_jjfb_dpT ({100,-300,300}),
-    h_jjpT_dy  (axis_y),         h_jjfb_dy  (axis_y),
-    h_jjpT_deta(axis_y),         h_jjfb_deta(axis_y),
+    h_jjpT_dy  (axis_absy),      h_jjfb_dy  (axis_absy),
+    h_jjpT_deta(axis_absy),      h_jjfb_deta(axis_absy),
     h_jjpT_dphi(axis_phi),       h_jjfb_dphi(axis_phi),
     h_jjpT_mass({50,0,1e3}),     h_jjfb_mass({50,0,1e3});
   // ================================================================
@@ -157,7 +158,7 @@ int main(int argc, char* argv[])
   TTreeReaderArray<p4_t>  _py(reader,"py");
   TTreeReaderArray<p4_t>  _pz(reader,"pz");
   TTreeReaderArray<p4_t>  _E (reader,"E");
-  TTreeReaderValue<Double_t> _weight(reader,"weight2");
+  TTreeReaderValue<Double_t> _weight(reader,"weight");
   boost::optional<TTreeReaderValue<Int_t>> _ncount;
   // boost::optional<TTreeReaderValue<Char_t>> _part;
   for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
@@ -265,9 +266,12 @@ int main(int argc, char* argv[])
 
     // Two most forward-backward jets ...............................
     unsigned jb = 0, jf = 0;
-    for (unsigned j=1; j<njets; ++j) {
-      if (jets[j].y < jets[jb].y) jb = j;
-      if (jets[j].y > jets[jf].y) jf = j;
+    if (njets==2) { jf = 1;
+    } else {
+      for (unsigned j=1; j<njets; ++j) {
+        if (jets[j].y < jets[jb].y) jb = j;
+        if (jets[j].y > jets[jf].y) jf = j;
+      }
     }
     const dijet& jjfb = ( (jb==0 && jf==1) || (jb==1 && jf==0)
       ? jjpT : dijet(jets[jb],jets[jf])

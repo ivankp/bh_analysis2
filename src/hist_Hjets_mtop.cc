@@ -35,8 +35,6 @@ using std::endl;
 
 using ivanp::cat;
 
-using p4_t = Float_t;
-
 namespace fj = fastjet;
 using namespace ivanp::math;
 
@@ -71,39 +69,27 @@ struct hist_bin {
     w2 += weight*weight;
     ++n;
   }
+  inline hist_bin& operator+=(const hist_bin& b) noexcept {
+    w += b.w;
+    w2 += b.w2;
+    n += b.n;
+    return *this;
+  }
 };
 double hist_bin::weight;
 
-template <typename T>
-using axis = ivanp::uniform_axis<T>;
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
-using hist = hist_t<axis<T>>;
+using hist = hist_t<ivanp::uniform_axis<T>>;
+
+#include "make_TH1D.hh"
 
 using re_axis = typename re_axes::axis_type;
 template <size_t N>
 using re_hist = ivanp::binner<hist_bin,
   ivanp::tuple_of_same_t<ivanp::axis_spec<re_axis>,N>>;
-
-template <typename A>
-TH1D* root_hist(const hist_t<A>& h, const std::string& name) {
-  TH1D* hr = new TH1D(name.c_str(),"",
-                      h.axis().nbins(),h.axis().min(),h.axis().max());
-  hr->Sumw2();
-  TArrayD& sumw2 = *hr->GetSumw2();
-  const auto& bins = h.bins();
-  size_t n_total = 0;
-  for (int i=0, n=bins.size(); i<n; ++i) {
-    const auto& bin = bins[i];
-    hr->SetBinContent(i,bin.w);
-    sumw2[i] = bin.w2;
-    n_total += bin.n;
-  }
-  hr->SetEntries(n_total);
-  return hr;
-}
 
 int main(int argc, char* argv[])
 {
@@ -113,16 +99,15 @@ int main(int argc, char* argv[])
   constexpr unsigned need_njets = 2;
 
   // Define histograms ==============================================
-  size_t N = 0, num_events = 0, num_selected = 0;
+  size_t ncount = 0, num_events = 0, num_selected = 0;
 
-  axis<int> a_Njets(need_njets+2,0,need_njets+2);
-  hist<int> h_Njets_incl(a_Njets), h_Njets_excl(a_Njets);
+  hist<int> h_Njets({need_njets+2,0,need_njets+2});
 
   re_axes ra("binning.txt");
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
-  a_(y) a_(absy) a_(phi)
+  a_(y) a_(phi)
 
   h_(HT) h_(H_pT) h_(H_y) h_(H_eta) h_(H_phi) h_(H_mass)
 
@@ -133,16 +118,23 @@ int main(int argc, char* argv[])
     h_jet_phi.reserve(need_njets+1);
     h_jet_mass.reserve(need_njets+1);
   for (unsigned i=0; i<need_njets+1; ++i) {
-    static std::string name;
-    name = cat("jet",i+1,"_pT");
+    auto name = cat("jet",i+1,"_pT");
     h_jet_pT.emplace_back(name,ra[name]);
-    name = cat("jet",i+1,"_y");
+  }
+  for (unsigned i=0; i<need_njets+1; ++i) {
+    auto name = cat("jet",i+1,"_y");
     h_jet_y.emplace_back(name,a_y);
-    name = cat("jet",i+1,"_eta");
+  }
+  for (unsigned i=0; i<need_njets+1; ++i) {
+    auto name = cat("jet",i+1,"_eta");
     h_jet_eta.emplace_back(name,a_y);
-    name = cat("jet",i+1,"_phi");
+  }
+  for (unsigned i=0; i<need_njets+1; ++i) {
+    auto name = cat("jet",i+1,"_phi");
     h_jet_phi.emplace_back(name,a_phi);
-    name = cat("jet",i+1,"_mass");
+  }
+  for (unsigned i=0; i<need_njets+1; ++i) {
+    auto name = cat("jet",i+1,"_mass");
     h_jet_mass.emplace_back(name,ra[name]);
   }
 
@@ -164,6 +156,8 @@ int main(int argc, char* argv[])
   std::array<std::array< re_hist<2>, 3>,3> h_p1pT_p2x;
   for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
 
+  test(h_p1pT_p2x[0][0].nbins_total())
+
   // ================================================================
 
   // Open input ntuple root file
@@ -173,11 +167,12 @@ int main(int argc, char* argv[])
   // Set up branches for reading
   TTreeReader reader("t3",fin.get());
   if (!reader.GetTree()) {
-    cerr << "\033[31mNo tree \"t3\" in file"
+    cerr << "\033[31mNo tree \"t3\" in file "
          << argv[1] <<"\033[0m"<< endl;
     return 1;
   }
 
+  using p4_t = Float_t;
   TTreeReaderValue<Int_t> _id(reader,"id");
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
@@ -205,7 +200,7 @@ int main(int argc, char* argv[])
     curr_id = *_id;
     if (prev_id!=curr_id) {
       prev_id = curr_id;
-      N += ( _ncount ? **_ncount : 1);
+      ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
     // --------------------------------------------------------------
@@ -242,9 +237,8 @@ int main(int argc, char* argv[])
     const unsigned njets = fj_jets.size();
     // --------------------------------------------------------------
 
-    // Fill Njets histograms before cuts ----------------------------
-    h_Njets_excl.fill_bin(njets+1); // nj+1 because nj==0 is bin 1
-    for (unsigned j=1; j<=njets+1; ++j) h_Njets_incl.fill_bin(j);
+    // Fill Njets histograms before cuts
+    h_Njets.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
     // --------------------------------------------------------------
 
     // Apply event cuts ---------------------------------------------
@@ -346,10 +340,9 @@ int main(int argc, char* argv[])
   } // END EVENT LOOP
   // ****************************************************************
 
-  test(N)
-
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
+  cout << "ncount: " << ncount << endl;
 
   // Open input ntuple root file
   auto fout = std::make_unique<TFile>(argv[2],"recreate");
@@ -358,39 +351,24 @@ int main(int argc, char* argv[])
   fout->mkdir("weight2_JetAntiKt4")->cd();
 
   // write root historgrams
-#define rh(name) root_hist(h_##name,#name);
-  rh(Njets_incl)
-  rh(Njets_excl)
+  root_hist(h_Njets,"jets_N_excl");
+  h_Njets.integrate_left();
+  root_hist(h_Njets,"jets_N_incl");
 
-  rh(HT)
+  for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
 
-  rh(H_pT)
-  rh(H_y)
-  rh(H_eta)
-  rh(H_phi)
-  rh(H_mass)
-
-  for (unsigned i=0; i<=need_njets; ++i)
-    root_hist(h_jet_pT  [i],cat("jet",i+1,"_pT"));
-  for (unsigned i=0; i<=need_njets; ++i)
-    root_hist(h_jet_y   [i],cat("jet",i+1,"_y"));
-  for (unsigned i=0; i<=need_njets; ++i)
-    root_hist(h_jet_eta [i],cat("jet",i+1,"_eta"));
-  for (unsigned i=0; i<=need_njets; ++i)
-    root_hist(h_jet_phi [i],cat("jet",i+1,"_phi"));
-  for (unsigned i=0; i<=need_njets; ++i)
-    root_hist(h_jet_mass[i],cat("jet",i+1,"_mass"));
-
-  if (need_njets >= 2) {
-    rh(jjpT_dpT ) rh(jjfb_dpT )
-    rh(jjpT_dy  ) rh(jjfb_dy  )
-    rh(jjpT_deta) rh(jjfb_deta)
-    rh(jjpT_dphi) rh(jjfb_dphi)
-    rh(jjpT_mass) rh(jjfb_mass)
-  }
+  root_hist(h_p1pT_p2x[0][0],   "H_pT","xH");
+  root_hist(h_p1pT_p2x[0][1],   "H_pT","x1");
+  root_hist(h_p1pT_p2x[0][2],   "H_pT","x2");
+  root_hist(h_p1pT_p2x[1][0],"jet1_pT","xH");
+  root_hist(h_p1pT_p2x[1][1],"jet1_pT","x1");
+  root_hist(h_p1pT_p2x[1][2],"jet1_pT","x2");
+  root_hist(h_p1pT_p2x[2][0],"jet2_pT","xH");
+  root_hist(h_p1pT_p2x[2][1],"jet2_pT","x1");
+  root_hist(h_p1pT_p2x[2][2],"jet2_pT","x2");
 
   fout->cd();
-  (new TH1D("N","N",1,0,1))->SetBinContent(1,N);
+  (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
   fout->Write();
 
   return 0;

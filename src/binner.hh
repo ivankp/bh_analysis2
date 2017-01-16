@@ -149,9 +149,11 @@ public:
   }
 
   template <unsigned I=0>
-  constexpr const axis_type<I>& axis() const noexcept {
+  // constexpr const axis_type<I>& axis() const noexcept {
+  constexpr const auto& axis() const noexcept {
     return std::get<I>(_axes);
   }
+  constexpr const auto& axes() const noexcept { return _axes; }
 
   constexpr size_type nbins_total() const noexcept {
     return nbins_total_impl<naxes-1>();
@@ -212,6 +214,18 @@ public:
   inline std::enable_if_t<(sizeof...(Args)>=naxes),size_type>
   operator()(const Args&... args) {
     return fill(args...);
+  }
+
+  // Algorithms -----------------------------------------------------
+  void integrate_right() {
+    auto b=++_bins.begin();
+    const auto end = _bins.end();
+    for ( ; b!=end; ++b) (*b) += (*(b-1));
+  }
+  void integrate_left() {
+    auto b=++_bins.rbegin();
+    const auto end = _bins.rend();
+    for ( ; b!=end; ++b) (*b) += (*(b-1));
   }
 };
 

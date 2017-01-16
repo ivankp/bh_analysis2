@@ -37,6 +37,9 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 -include $(DEPS)
 endif
 
+$(BIN)/test_re_axes: $(BLD)/re_axes.o
+$(BIN)/hist_Hjets_mtop: $(BLD)/re_axes.o
+
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@
 

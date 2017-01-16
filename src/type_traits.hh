@@ -70,6 +70,26 @@ template <typename T, T... Ints>
 struct is_integer_sequence<std::integer_sequence<T,Ints...>>: std::true_type { };
 #endif
 
+// Tuple of same types **********************************************
+
+#ifdef _GLIBCXX_TUPLE
+namespace detail {
+template <typename T, typename S> struct tuple_of_same_impl { };
+template <typename T, size_t... I>
+struct tuple_of_same_impl<T,std::index_sequence<I...>> {
+  template <typename U, size_t J> using identity = U;
+  using type = std::tuple<identity<T,I>...>;
+};
+}
+
+template <typename T, size_t N>
+struct tuple_of_same
+: detail::tuple_of_same_impl<T,std::make_index_sequence<N>> { };
+
+template <typename T, size_t N>
+using tuple_of_same_t = typename tuple_of_same<T,N>::type;
+#endif
+
 // Expression traits ************************************************
 
 // void_t technique from Walter Brown

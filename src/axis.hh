@@ -325,6 +325,8 @@ public:
   ref_axis() = default;
   ~ref_axis() = default;
 
+  ref_axis(abstract_axis<EdgeType>* ptr): _ref(ptr) { }
+
   ref_axis(axis_ref ref): _ref(ref) { }
   ref_axis& operator=(axis_ref ref) {
     _ref = ref;

@@ -7,7 +7,7 @@
 
 namespace ivanp {
 
-template <typename BinType> struct default_bin_filler {
+template <typename BinType> struct bin_filler {
 
   template <typename Bin = BinType>
   inline typename std::enable_if<
@@ -37,15 +37,9 @@ template <typename BinType> struct default_bin_filler {
   operator()(Bin& bin, T&& x) noexcept(noexcept(bin+=std::forward<T>(x)))
   { bin+=std::forward<T>(x); }
 
-  template <typename T, typename Bin = BinType>
-  inline typename std::enable_if<
-    !has_plus_eq<Bin,T>::value &&
-    is_callable<Bin,T>::value
-  >::type
-  operator()(Bin& bin, T&& x) noexcept(noexcept(bin(x))) { bin(x); }
-
   template <typename T1, typename... TT, typename Bin = BinType>
   inline typename std::enable_if<
+    ( !has_plus_eq<Bin,T1>::value || sizeof...(TT) ) &&
     is_callable<Bin,T1,TT...>::value
   >::type
   operator()(Bin& bin, T1&& arg1, TT&&... args)

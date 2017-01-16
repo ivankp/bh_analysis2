@@ -113,11 +113,6 @@ int main(int argc, char* argv[])
   constexpr unsigned need_njets = 2;
 
   // Define histograms ==============================================
-  test(sizeof(axis<double>))
-  test(sizeof(hist<double>))
-  test(sizeof(re_axis))
-  test(sizeof(re_hist<1>))
-  test(sizeof(re_hist<2>))
   size_t N = 0, num_events = 0, num_selected = 0;
 
   axis<int> a_Njets(need_njets+2,0,need_njets+2);
@@ -234,8 +229,6 @@ int main(int argc, char* argv[])
     auto fj_jets = fj::ClusterSequence(particles,jet_def) // cluster
       .inclusive_jets(jet_pt_cut); // apply pT cut
     // apply eta cut
-    // std::remove_if( fj_jets.begin(), fj_jets.end(),
-    //   [=](const fj::PseudoJet& j){ return (j.eta() > jet_eta_cut); });
     for (auto it=fj_jets.begin(); it!=fj_jets.end(); ) {
       if (abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
       else ++it;

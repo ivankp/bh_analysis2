@@ -84,12 +84,52 @@ using hist_t = ivanp::binner<hist_bin,
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
-#include "make_TH1D.hh"
-
 using re_axis = typename re_axes::axis_type;
 template <size_t N>
 using re_hist = ivanp::binner<hist_bin,
   ivanp::tuple_of_same_t<ivanp::axis_spec<re_axis>,N>>;
+
+template <typename A, typename B>
+TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
+  TH1D* h = new TH1D(name,"",axis.nbins(),axis.min(),axis.max());
+  h->Sumw2();
+  TArrayD& sumw2 = *h->GetSumw2();
+  size_t n_total = 0, i = 0;
+  for (auto bin=begin; bin!=end; ++bin, ++i) {
+    h->SetBinContent(i,bin->w);
+    sumw2[i] = bin->w2;
+    n_total += bin->n;
+  }
+  h->SetEntries(n_total);
+  return h;
+}
+
+template <typename A>
+TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h, const std::string& name) {
+  return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
+}
+
+// template <typename A1, typename A2>
+// void root_hist(const ivanp::binner<hist_bin,std::tuple<A1,A2>>& h, const std::string& name,
+void root_hist(const re_hist<2>& h, const std::string& name,
+  const std::string& var2
+) {
+  const auto& a1 = h.axis<0>();
+  const auto& a2 = h.axis<1>();
+  const auto nbins1 = h.nbins<0>();
+  const auto nbins2 = a2.nbins()+1;
+  // for (const auto& b : h.bins()) cout << ' ' << b.w;
+  // cout << endl;
+  // test(h.bins().size())
+  // test(nbins1)
+  // test(nbins2)
+  auto it = h.bins().begin() + nbins1;
+  for (unsigned i=1; i<nbins2; ++i) {
+    make_TH1D(cat(name,'_',var2,"_[",a2.lower(i),',',a2.upper(i),')').c_str(),
+      a1,it,it+nbins1);
+    it += nbins1;
+  }
+}
 
 int main(int argc, char* argv[])
 {
@@ -103,7 +143,7 @@ int main(int argc, char* argv[])
 
   hist<int> h_Njets({need_njets+2,0,need_njets+2});
 
-  re_axes ra("binning.txt");
+  re_axes ra("Hjets_mtop.bins");
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
@@ -155,8 +195,6 @@ int main(int argc, char* argv[])
   // p1's pT in bins of p2's x
   std::array<std::array< re_hist<2>, 3>,3> h_p1pT_p2x;
   for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
-
-  test(h_p1pT_p2x[0][0].nbins_total())
 
   // ================================================================
 

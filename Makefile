@@ -11,9 +11,6 @@ FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
 FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
-C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
-
 C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets_mtop := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
@@ -39,6 +36,7 @@ endif
 
 $(BIN)/test_re_axes: $(BLD)/re_axes.o
 $(BIN)/hist_Hjets_mtop: $(BLD)/re_axes.o
+$(BIN)/test_binning: $(BLD)/re_axes.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@

@@ -12,15 +12,21 @@ template <typename... T> using void_t = typename make_void<T...>::type;
 
 template <typename New, typename Old> using replace_t = New;
 
-// boolean compositing **********************************************
+// Operations on traits *********************************************
 
-template <bool...> struct bool_sequence {};
+template<class...> struct conjunction: std::true_type { };
+template<class B1> struct conjunction<B1>
+: std::integral_constant<bool,bool(B1::value)> { };
+template<class B1, class... Bn> struct conjunction<B1, Bn...> 
+: std::conditional_t<bool(B1::value),
+  conjunction<Bn...>, conjunction<B1> > {};
 
-template <bool... B>
-using mp_and = std::is_same< bool_sequence< B... >,
-                             bool_sequence< ( B || true )... > >;
-template <bool... B>
-using mp_or = std::integral_constant< bool, !mp_and< !B... >::value >;
+template<class...> struct disjunction: std::false_type { };
+template<class B1> struct disjunction<B1>
+: std::integral_constant<bool,bool(B1::value)> { };
+template<class B1, class... Bn> struct disjunction<B1, Bn...> 
+: std::conditional_t<bool(B1::value),
+  disjunction<B1>, disjunction<Bn...>>  { };
 
 // ******************************************************************
 

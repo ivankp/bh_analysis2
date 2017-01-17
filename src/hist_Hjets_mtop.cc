@@ -118,11 +118,6 @@ void root_hist(const re_hist<2>& h, const std::string& name,
   const auto& a2 = h.axis<1>();
   const auto nbins1 = h.nbins<0>();
   const auto nbins2 = a2.nbins()+1;
-  // for (const auto& b : h.bins()) cout << ' ' << b.w;
-  // cout << endl;
-  // test(h.bins().size())
-  // test(nbins1)
-  // test(nbins2)
   auto it = h.bins().begin() + nbins1;
   for (unsigned i=1; i<nbins2; ++i) {
     make_TH1D(cat(name,'_',var2,"_[",a2.lower(i),',',a2.upper(i),')').c_str(),

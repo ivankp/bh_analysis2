@@ -105,24 +105,86 @@ TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
 }
 
 template <typename A>
-TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h, const std::string& name) {
+TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
+  const std::string& name
+) {
   return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
 }
 
 // template <typename A1, typename A2>
-// void root_hist(const ivanp::binner<hist_bin,std::tuple<A1,A2>>& h, const std::string& name,
+// void root_hist(const ivanp::binner<hist_bin,std::tuple<A1,A2>>& h,
+//   const std::string& name,
 void root_hist(const re_hist<2>& h, const std::string& name,
   const std::string& var2
 ) {
   const auto& a1 = h.axis<0>();
   const auto& a2 = h.axis<1>();
   const auto nbins1 = h.nbins<0>();
-  const auto nbins2 = a2.nbins()+1;
+  const auto nbins2 = h.nbins<1>();
   auto it = h.bins().begin() + nbins1;
-  for (unsigned i=1; i<nbins2; ++i) {
+  for (unsigned i=1; i<nbins2-1; ++i) {
     make_TH1D(cat(name,'_',var2,"_[",a2.lower(i),',',a2.upper(i),')').c_str(),
       a1,it,it+nbins1);
     it += nbins1;
+  }
+}
+void root_hist(const re_hist<3>& h, const std::string& name,
+  const std::string& var2, const std::string& var3
+) {
+  const auto& a1 = h.axis<0>();
+  const auto& a2 = h.axis<1>();
+  const auto& a3 = h.axis<2>();
+  const auto nbins1 = h.nbins<0>();
+  const auto nbins2 = h.nbins<1>();
+  const auto nbins3 = h.nbins<2>();
+  auto it = h.bins().begin() + nbins1*nbins2;
+  for (unsigned j=1; j<nbins3-1; ++j) {
+    it += nbins1;
+    for (unsigned i=1; i<nbins2-1; ++i) {
+      make_TH1D(cat( name,
+          '_',var2,"_[",a2.lower(i),',',a2.upper(i),')',
+          '_',var3,"_[",a3.lower(j),',',a3.upper(j),')'
+        ).c_str(), a1,it,it+nbins1);
+      it += nbins1;
+    }
+    it += nbins1;
+  }
+}
+template <size_t N>
+void root_hist(std::array<const re_hist<3>*,N> hh,
+  std::array<const char*,N> name,
+  const std::string& var2, const std::string& var3
+) {
+  // const auto& a1 = hh[0].axis<0>();
+  // const auto& a2 = hh[0].axis<1>();
+  // const auto& a3 = hh[0].axis<2>();
+  // const auto nbins1 = hh[0].nbins<0>();
+  // const auto nbins2 = hh[0].nbins<1>();
+  // const auto nbins3 = hh[0].nbins<2>();
+  const auto& a1 = std::get<0>(hh[0]->axes());
+  const auto& a2 = std::get<1>(hh[0]->axes());
+  const auto& a3 = std::get<2>(hh[0]->axes());
+  const auto nbins1 = a1.nbins()+2;
+  const auto nbins2 = a2.nbins()+2;
+  const auto nbins3 = a3.nbins()+2;
+  const auto n12 = nbins1*nbins2;
+  std::array<re_hist<3>::container_type::const_iterator,N> its;
+  std::transform(hh.begin(),hh.end(),its.begin(),[n12](const re_hist<3>* h){
+    return h->bins().begin() + n12;
+  });
+  for (unsigned j=1; j<nbins3-1; ++j) {
+    for (auto& it : its) it += nbins1;
+    for (unsigned i=1; i<nbins2-1; ++i) {
+      for (unsigned k=0; k<N; ++k) {
+        auto& it = its[k];
+        make_TH1D(cat( name[k],
+            '_',var2,"_[",a2.lower(i),',',a2.upper(i),')',
+            '_',var3,"_[",a3.lower(j),',',a3.upper(j),')'
+          ).c_str(), a1,it,it+nbins1);
+        it += nbins1;
+      }
+    }
+    for (auto& it : its) it += nbins1;
   }
 }
 
@@ -389,6 +451,14 @@ int main(int argc, char* argv[])
   root_hist(h_Njets,"jets_N_incl");
 
   for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
+
+  // root_hist(h_xH_HT_maxdy,"xH","HT","maxdy");
+  // root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
+  // root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
+  std::array<const re_hist<3>*,3> hh_x_HT_maxdy {
+    &h_xH_HT_maxdy, &h_x1_HT_maxdy, &h_x2_HT_maxdy
+  };
+  root_hist(hh_x_HT_maxdy,{"xH","x1","x2"},"HT","maxdy");
 
   root_hist(h_p1pT_p2x[0][0],   "H_pT","xH");
   root_hist(h_p1pT_p2x[0][1],   "H_pT","x1");

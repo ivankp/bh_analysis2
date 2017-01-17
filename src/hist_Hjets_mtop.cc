@@ -25,6 +25,7 @@
 #include "re_axes.hh"
 #include "timed_counter.hh"
 #include "catstr.hh"
+#include "burst.hh"
 
 #define test(var) \
   cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << endl;
@@ -96,6 +97,20 @@ TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
   for (auto bin=begin; bin!=end; ++bin, ++i) {
+    h->SetBinContent(i,bin->w);
+    sumw2[i] = bin->w2;
+    n_total += bin->n;
+  }
+  h->SetEntries(n_total);
+  return h;
+}
+template <typename It, typename... Edges>
+TH1D* make_TH1D(const char* name, const ivanp::binner_slice<It,Edges...>& s) {
+  TH1D* h = new TH1D(name,"",s.end-s.begin-2,0,1);
+  h->Sumw2();
+  TArrayD& sumw2 = *h->GetSumw2();
+  size_t n_total = 0, i = 0;
+  for (auto bin=s.begin; bin!=s.end; ++bin, ++i) {
     h->SetBinContent(i,bin->w);
     sumw2[i] = bin->w2;
     n_total += bin->n;
@@ -251,7 +266,7 @@ int main(int argc, char* argv[])
 
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
-  for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
+  for (tc ent(reader.GetEntries(true)); reader.Next() /* && ent < 1 */; ++ent) {
     hist_bin::weight = *_weight; // Read weight
 
     // Keep track of multi-entry events -----------------------------
@@ -418,6 +433,18 @@ int main(int argc, char* argv[])
   root_hist(h_xH_HT_maxdy,"xH","HT","maxdy");
   root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
   root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
+
+  const auto h_p1pT_p2x_00_burst = ivanp::burst<1>(
+    h_p1pT_p2x[0][0].axes(),
+    h_p1pT_p2x[0][0].bins().begin(),
+    h_p1pT_p2x[0][0].bins().begin()
+  );
+  for (const auto& s : h_p1pT_p2x_00_burst) {
+    test(std::get<0>(s.ranges)[0])
+    test(std::get<0>(s.ranges)[1])
+    make_TH1D(cat("test_[",
+      std::get<0>(s.ranges)[0],',', std::get<0>(s.ranges)[1],')' ).c_str(),s);
+  }
 
   root_hist(h_p1pT_p2x[0][0],   "H_pT","xH");
   root_hist(h_p1pT_p2x[0][1],   "H_pT","x1");

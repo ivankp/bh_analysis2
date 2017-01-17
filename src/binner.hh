@@ -5,6 +5,7 @@
 
 #include <tuple>
 #include <array>
+#include <vector>
 #include <stdexcept>
 
 #include "axis.hh"

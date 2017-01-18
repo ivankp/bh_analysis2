@@ -123,12 +123,23 @@ make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   return h;
 }
 
-template <size_t D, typename... A>
-auto burst(
-  const ivanp::binner<hist_bin,std::tuple<A...>>& h
-) {
-  return ivanp::burst<D>( h.axes(), h.bins().begin(), h.bins().begin() );
+// template <size_t D, typename... A>
+// auto burst(
+//   const ivanp::binner<hist_bin,std::tuple<A...>>& h
+// ) {
+//   return ivanp::burst<D>( h.axes(), h.bins().begin(), h.bins().begin() );
+// }
+
+template <size_t I=0, typename It, typename S>
+std::enable_if_t<(I<S::slices_size),
+std::string> make_name(It it, const S& s) {
+  std::string name = cat('_',*it,
+    "_[",std::get<I>(s.slices)[0],',', std::get<I>(s.slices)[1],')');
+  return name + make_name<I+1>(++it,s);
 }
+template <size_t I=0, typename It, typename S>
+std::enable_if_t<(I==S::slices_size),
+std::string> make_name(It it, const S& s) { return {}; }
 
 template <size_t D, typename... A>
 void make_root_hists(
@@ -141,11 +152,9 @@ void make_root_hists(
     h.axes(), h.bins().begin(), h.bins().begin() );
   for (const auto& s : slices) {
     auto it = names.begin();
-    std::string name = *(it++);
-    for ( ; it!=names.end(); ++it) {
-      name += cat('_',*it,
-        "_[",std::get<0>(s.slices)[0],',', std::get<0>(s.slices)[1],')');
-    }
+    std::string name = *it;
+    name += make_name(++it,s);
+    test(name)
     make_TH<1>(name,s);
   }
 }
@@ -157,9 +166,6 @@ TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
   return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
 }
 
-// template <typename A1, typename A2>
-// void root_hist(const ivanp::binner<hist_bin,std::tuple<A1,A2>>& h,
-//   const std::string& name,
 void root_hist(const re_hist<2>& h, const std::string& name,
   const std::string& var2
 ) {
@@ -461,41 +467,24 @@ int main(int argc, char* argv[])
 
   for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
 
-  root_hist(h_xH_HT_maxdy,"xH","HT","maxdy");
-  root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
-  root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
-
-  // make_root_hists<1>(h_p1pT_p2x[0][0],{"test_H_pT","xH"});
-
-  root_hist(h_p1pT_p2x[0][0],   "H_pT","xH");
-  root_hist(h_p1pT_p2x[0][1],   "H_pT","x1");
-  root_hist(h_p1pT_p2x[0][2],   "H_pT","x2");
-  root_hist(h_p1pT_p2x[1][0],"jet1_pT","xH");
-  root_hist(h_p1pT_p2x[1][1],"jet1_pT","x1");
-  root_hist(h_p1pT_p2x[1][2],"jet1_pT","x2");
-  root_hist(h_p1pT_p2x[2][0],"jet2_pT","xH");
-  root_hist(h_p1pT_p2x[2][1],"jet2_pT","x1");
-  root_hist(h_p1pT_p2x[2][2],"jet2_pT","x2");
-
+  root_hist(h_p1pT_p2x[0][0],"H_pT","xH");
   make_root_hists<1>(h_p1pT_p2x[0][0],{   "test_H_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[0][1],{   "test_H_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[0][2],{   "test_H_pT","x2"});
-  make_root_hists<1>(h_p1pT_p2x[1][0],{"test_jet1_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[1][1],{"test_jet1_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[1][2],{"test_jet1_pT","x2"});
-  make_root_hists<1>(h_p1pT_p2x[2][0],{"test_jet2_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[2][1],{"test_jet2_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[2][2],{"test_jet2_pT","x2"});
 
-  // test( burst<1>(h_p1pT_p2x[0][0]) );
-  // test( burst<1>(h_p1pT_p2x[0][1]) );
-  // test( burst<1>(h_p1pT_p2x[0][2]) );
-  // test( burst<1>(h_p1pT_p2x[1][0]) );
-  // test( burst<1>(h_p1pT_p2x[1][1]) );
-  // test( burst<1>(h_p1pT_p2x[1][2]) );
-  // test( burst<1>(h_p1pT_p2x[2][0]) );
-  // test( burst<1>(h_p1pT_p2x[2][1]) );
-  // test( burst<1>(h_p1pT_p2x[2][2]) );
+  root_hist(h_xH_HT_maxdy,"xH","HT","maxdy");
+  // root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
+  // root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
+
+  make_root_hists<1>(h_xH_HT_maxdy,{"test_xH","HT","maxdy"});
+
+  // make_root_hists<1>(h_p1pT_p2x[0][0],{   "test_H_pT","xH"});
+  // make_root_hists<1>(h_p1pT_p2x[0][1],{   "test_H_pT","x1"});
+  // make_root_hists<1>(h_p1pT_p2x[0][2],{   "test_H_pT","x2"});
+  // make_root_hists<1>(h_p1pT_p2x[1][0],{"test_jet1_pT","xH"});
+  // make_root_hists<1>(h_p1pT_p2x[1][1],{"test_jet1_pT","x1"});
+  // make_root_hists<1>(h_p1pT_p2x[1][2],{"test_jet1_pT","x2"});
+  // make_root_hists<1>(h_p1pT_p2x[2][0],{"test_jet2_pT","xH"});
+  // make_root_hists<1>(h_p1pT_p2x[2][1],{"test_jet2_pT","x1"});
+  // make_root_hists<1>(h_p1pT_p2x[2][2],{"test_jet2_pT","x2"});
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

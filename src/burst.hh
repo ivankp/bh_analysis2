@@ -43,37 +43,39 @@ inline auto make_slices(
 }
 
 template <size_t I=0, size_t N>
-inline std::enable_if_t<(I<N-1),bool> advance_cnt(
+inline std::enable_if_t<(I==N-1),std::pair<bool,bool>>
+advance_cnt(
   const std::array<axis_size_type,N>& nn,
   std::array<axis_size_type,N>& ii
 ) noexcept {
   if ((++std::get<I>(ii)) == std::get<I>(nn)) {
     std::get<I>(ii) = 0;
-    return advance_cnt<I+1>(nn,ii);
+    return {true,true};
   }
-  return true;
+  return {false,false};
 }
 template <size_t I=0, size_t N>
-inline std::enable_if_t<(I==N-1),bool> advance_cnt(
+inline std::enable_if_t<(I<N-1),std::pair<bool,bool>>
+advance_cnt(
   const std::array<axis_size_type,N>& nn,
   std::array<axis_size_type,N>& ii
 ) noexcept {
   if ((++std::get<I>(ii)) == std::get<I>(nn)) {
     std::get<I>(ii) = 0;
-    return false;
+    return {true,advance_cnt<I+1>(nn,ii).second};
   }
-  return true;
+  return {false,false};
 }
 
-template <size_t I, typename T, size_t N, typename F>
-inline std::enable_if_t<(I>1 && I<=N),T>
-prod(const std::array<T,N>& a, F f) {
-  return f(std::get<I-1>(a)) * prod<I-1>(a);
-}
 template <size_t I, typename T, size_t N, typename F>
 inline std::enable_if_t<(I==1),T>
 prod(const std::array<T,N>& a, F f) {
   return f(std::get<0>(a));
+}
+template <size_t I, typename T, size_t N, typename F>
+inline std::enable_if_t<(I>1 && I<=N),T>
+prod(const std::array<T,N>& a, F f) {
+  return f(std::get<I-1>(a)) * prod<I-1>(a,f);
 }
 
 } // end namespace detail
@@ -81,9 +83,13 @@ prod(const std::array<T,N>& a, F f) {
 template <typename, typename, typename> struct binner_slice { };
 template <typename It, typename... Ranges, typename... Slices>
 struct binner_slice<It,std::tuple<Ranges...>,std::tuple<Slices...>> {
+  using ranges_t = std::tuple<std::array<Ranges,2>...>;
+  using slices_t = std::tuple<std::array<Slices,2>...>;
+  static constexpr size_t ranges_size = sizeof...(Ranges);
+  static constexpr size_t slices_size = sizeof...(Slices);
   It begin, end;
-  std::tuple<std::array<Ranges,2>...> ranges;
-  std::tuple<std::array<Slices,2>...> slices;
+  ranges_t ranges;
+  slices_t slices;
 };
 
 template <typename, typename, typename, typename> struct make_binner_slice { };
@@ -115,32 +121,24 @@ auto burst(const std::tuple<A...>& axes, It first, It last) {
   const auto nbins2 = detail::all_nbins(axes,seq2{});
   std::remove_const_t<decltype(nbins2)> cnt{};
 
-  const size_t len1 = detail::prod<D>(nbins,
-    [](auto n){ return n+2; });
-  const size_t len2 = detail::prod<seq2::size()>(nbins2,
-    [](auto n){ return n; });
-
   std::vector<slice_t> slices;
-  slices.reserve(len2);
+  slices.reserve(
+    detail::prod<seq2::size()>(nbins2,[](auto n){ return n; }) );
 
-  It it = first + len1;
+  const auto len1 = detail::prod<D>(nbins,[](auto n){ return n+2; });
+  It it = first + detail::prod<seq::size()-1>(nbins,[](auto n){ return n+2; });
+  if (seq2::size()>1) it += len1;
 
-  // size_t i = 0;
-  do {
-    // test( ++i )
-    // slice_t s{it,it+len1, ranges, detail::make_slices(axes,cnt,seq2{})};
-    // slices.emplace_back(s);
+  for ( std::pair<bool,bool> check{false,false}; !check.second;
+        check = detail::advance_cnt(nbins2,cnt)
+  ) {
+    if (check.first) it += len1*2;
     slices.push_back({ it, it+len1,
       ranges, detail::make_slices(axes,cnt,seq2{}) });
     it += len1;
-  } while (detail::advance_cnt(nbins2,cnt));
-
-  // test( sizeof(slice_t) )
-  // test( slices.size() )
-  // test( slices.capacity() )
+  }
 
   return slices;
-  // return slices.size();
 }
 
 } // end namespace ivanp

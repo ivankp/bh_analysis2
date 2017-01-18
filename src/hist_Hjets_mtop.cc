@@ -16,6 +16,7 @@
 #include <TDirectory.h>
 #include <TKey.h>
 #include <TH1.h>
+#include <TH2.h>
 #include <TLorentzVector.h>
 
 #include <fastjet/ClusterSequence.hh>
@@ -109,13 +110,34 @@ TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
 template <size_t D, typename... T>
 std::enable_if_t<D==1,TH1D*>
 make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
-  TH1D* h = new TH1D(name.c_str(),"", s.end-s.begin-2,
-    std::get<0>(s.ranges)[0], std::get<0>(s.ranges)[1]);
+  static_assert(std::decay_t<decltype(s)>::ranges_size==D,"");
+  TH1D* h = new TH1D(name.c_str(),"",
+    s.nbins[0], std::get<0>(s.ranges)[0], std::get<0>(s.ranges)[1]);
   h->Sumw2();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
   for (auto bin=s.begin; bin!=s.end; ++bin, ++i) {
     h->SetBinContent(i,bin->w);
+    sumw2[i] = bin->w2;
+    n_total += bin->n;
+  }
+  h->SetEntries(n_total);
+  return h;
+}
+template <size_t D, typename... T>
+std::enable_if_t<D==2,TH2D*>
+make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
+  static_assert(std::decay_t<decltype(s)>::ranges_size==D,"");
+  TH2D* h = new TH2D(name.c_str(),"",
+    s.nbins[0], std::get<0>(s.ranges)[0], std::get<0>(s.ranges)[1],
+    s.nbins[1], std::get<1>(s.ranges)[0], std::get<1>(s.ranges)[1]);
+  h->Sumw2();
+  // auto *bins = dynamic_cast<TArrayD*>(h)->GetArray();
+  TArrayD& sumw2 = *h->GetSumw2();
+  size_t n_total = 0, i = 0;
+  for (auto bin=s.begin; bin!=s.end; ++bin, ++i) {
+    h->SetBinContent(i,bin->w);
+    // bins[i]  = bin->w;
     sumw2[i] = bin->w2;
     n_total += bin->n;
   }
@@ -154,8 +176,16 @@ void make_root_hists(
     auto it = names.begin();
     std::string name = *it;
     name += make_name(++it,s);
-    test(name)
-    make_TH<1>(name,s);
+    // test(name)
+    auto *th = make_TH<D>(name,s);
+    if (D==1) {
+      th->SetXTitle(names.begin()->c_str());
+    } else if (D==2) {
+      const auto n1 = names.begin();
+      const auto d = n1->rfind('_');
+      th->SetXTitle(n1->substr(0,d).c_str());
+      th->SetYTitle(n1->substr(d+1).c_str());
+    }
   }
 }
 
@@ -164,43 +194,6 @@ TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
   const std::string& name
 ) {
   return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
-}
-
-void root_hist(const re_hist<2>& h, const std::string& name,
-  const std::string& var2
-) {
-  const auto& a1 = h.axis<0>();
-  const auto& a2 = h.axis<1>();
-  const auto nbins1 = h.nbins<0>();
-  const auto nbins2 = h.nbins<1>();
-  auto it = h.bins().begin() + nbins1;
-  for (unsigned i=1; i<nbins2-1; ++i) {
-    make_TH1D(cat(name,'_',var2,"_[",a2.lower(i),',',a2.upper(i),')').c_str(),
-      a1,it,it+nbins1);
-    it += nbins1;
-  }
-}
-void root_hist(const re_hist<3>& h, const std::string& name,
-  const std::string& var2, const std::string& var3
-) {
-  const auto& a1 = h.axis<0>();
-  const auto& a2 = h.axis<1>();
-  const auto& a3 = h.axis<2>();
-  const auto nbins1 = h.nbins<0>();
-  const auto nbins2 = h.nbins<1>();
-  const auto nbins3 = h.nbins<2>();
-  auto it = h.bins().begin() + nbins1*nbins2;
-  for (unsigned j=1; j<nbins3-1; ++j) {
-    it += nbins1;
-    for (unsigned i=1; i<nbins2-1; ++i) {
-      make_TH1D(cat( name,
-          '_',var2,"_[",a2.lower(i),',',a2.upper(i),')',
-          '_',var3,"_[",a3.lower(j),',',a3.upper(j),')'
-        ).c_str(), a1,it,it+nbins1);
-      it += nbins1;
-    }
-    it += nbins1;
-  }
 }
 
 int main(int argc, char* argv[])
@@ -267,6 +260,13 @@ int main(int argc, char* argv[])
   // p1's pT in bins of p2's x
   std::array<std::array< re_hist<2>, 3>,3> h_p1pT_p2x;
   for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
+
+  // xi vs xj in bins of HT
+  a_(_x3)
+  re_hist<3>
+    h_xH_x1_HT(a__x3,a__x3,a__HT),
+    h_xH_x2_HT(a__x3,a__x3,a__HT),
+    h_x1_x2_HT(a__x3,a__x3,a__HT);
 
   // ================================================================
 
@@ -416,6 +416,10 @@ int main(int argc, char* argv[])
     h_p1pT_p2x[1][2](jets[0].pT, x2);
     h_p1pT_p2x[2][2](jets[1].pT, x2);
 
+    h_xH_x1_HT(xH,x1,HT);
+    h_xH_x2_HT(xH,x2,HT);
+    h_x1_x2_HT(x1,x2,HT);
+
     // Jet pair with highest pT .....................................
     const dijet jjpT(jets[0],jets[1]);
 
@@ -467,24 +471,23 @@ int main(int argc, char* argv[])
 
   for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
 
-  root_hist(h_p1pT_p2x[0][0],"H_pT","xH");
-  make_root_hists<1>(h_p1pT_p2x[0][0],{   "test_H_pT","xH"});
+  make_root_hists<1>(h_xH_HT_maxdy,{"xH","HT","maxdy"});
+  make_root_hists<1>(h_x1_HT_maxdy,{"x1","HT","maxdy"});
+  make_root_hists<1>(h_x2_HT_maxdy,{"x2","HT","maxdy"});
 
-  root_hist(h_xH_HT_maxdy,"xH","HT","maxdy");
-  // root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
-  // root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
+  make_root_hists<1>(h_p1pT_p2x[0][0],{   "H_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[0][1],{   "H_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[0][2],{   "H_pT","x2"});
+  make_root_hists<1>(h_p1pT_p2x[1][0],{"jet1_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[1][1],{"jet1_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[1][2],{"jet1_pT","x2"});
+  make_root_hists<1>(h_p1pT_p2x[2][0],{"jet2_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[2][1],{"jet2_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[2][2],{"jet2_pT","x2"});
 
-  make_root_hists<1>(h_xH_HT_maxdy,{"test_xH","HT","maxdy"});
-
-  // make_root_hists<1>(h_p1pT_p2x[0][0],{   "test_H_pT","xH"});
-  // make_root_hists<1>(h_p1pT_p2x[0][1],{   "test_H_pT","x1"});
-  // make_root_hists<1>(h_p1pT_p2x[0][2],{   "test_H_pT","x2"});
-  // make_root_hists<1>(h_p1pT_p2x[1][0],{"test_jet1_pT","xH"});
-  // make_root_hists<1>(h_p1pT_p2x[1][1],{"test_jet1_pT","x1"});
-  // make_root_hists<1>(h_p1pT_p2x[1][2],{"test_jet1_pT","x2"});
-  // make_root_hists<1>(h_p1pT_p2x[2][0],{"test_jet2_pT","xH"});
-  // make_root_hists<1>(h_p1pT_p2x[2][1],{"test_jet2_pT","x1"});
-  // make_root_hists<1>(h_p1pT_p2x[2][2],{"test_jet2_pT","x2"});
+  make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
+  make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
+  make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

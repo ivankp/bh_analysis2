@@ -113,7 +113,7 @@ auto burst(const std::tuple<A...>& axes, It first, It last) {
 
   const auto nbins = detail::all_nbins(axes,seq{});
   const auto nbins2 = detail::all_nbins(axes,seq2{});
-  std::remove_const_t<decltype(nbins2)> cnt;
+  std::remove_const_t<decltype(nbins2)> cnt{};
 
   const size_t len1 = detail::prod<D>(nbins,
     [](auto n){ return n+2; });
@@ -125,13 +125,22 @@ auto burst(const std::tuple<A...>& axes, It first, It last) {
 
   It it = first + len1;
 
+  // size_t i = 0;
   do {
-    slice_t s{it,it+len1, ranges, detail::make_slices(axes,cnt,seq2{})};
-    slices.emplace_back(s);
+    // test( ++i )
+    // slice_t s{it,it+len1, ranges, detail::make_slices(axes,cnt,seq2{})};
+    // slices.emplace_back(s);
+    slices.push_back({ it, it+len1,
+      ranges, detail::make_slices(axes,cnt,seq2{}) });
     it += len1;
   } while (detail::advance_cnt(nbins2,cnt));
 
+  // test( sizeof(slice_t) )
+  // test( slices.size() )
+  // test( slices.capacity() )
+
   return slices;
+  // return slices.size();
 }
 
 } // end namespace ivanp

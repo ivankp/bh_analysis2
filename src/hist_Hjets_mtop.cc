@@ -25,11 +25,12 @@
 #include "re_axes.hh"
 #include "timed_counter.hh"
 #include "catstr.hh"
-#include "burst.hh"
 #include "exception.hh"
 
 #define test(var) \
-  cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << endl;
+  std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
+
+#include "burst.hh"
 
 using std::cout;
 using std::cerr;
@@ -120,6 +121,13 @@ make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   }
   h->SetEntries(n_total);
   return h;
+}
+
+template <size_t D, typename... A>
+auto burst(
+  const ivanp::binner<hist_bin,std::tuple<A...>>& h
+) {
+  return ivanp::burst<D>( h.axes(), h.bins().begin(), h.bins().begin() );
 }
 
 template <size_t D, typename... A>
@@ -457,7 +465,7 @@ int main(int argc, char* argv[])
   root_hist(h_x1_HT_maxdy,"x1","HT","maxdy");
   root_hist(h_x2_HT_maxdy,"x2","HT","maxdy");
 
-  make_root_hists<1>(h_p1pT_p2x[0][0],{"test_H_pT","xH"});
+  // make_root_hists<1>(h_p1pT_p2x[0][0],{"test_H_pT","xH"});
 
   root_hist(h_p1pT_p2x[0][0],   "H_pT","xH");
   root_hist(h_p1pT_p2x[0][1],   "H_pT","x1");
@@ -468,6 +476,26 @@ int main(int argc, char* argv[])
   root_hist(h_p1pT_p2x[2][0],"jet2_pT","xH");
   root_hist(h_p1pT_p2x[2][1],"jet2_pT","x1");
   root_hist(h_p1pT_p2x[2][2],"jet2_pT","x2");
+
+  make_root_hists<1>(h_p1pT_p2x[0][0],{   "test_H_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[0][1],{   "test_H_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[0][2],{   "test_H_pT","x2"});
+  make_root_hists<1>(h_p1pT_p2x[1][0],{"test_jet1_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[1][1],{"test_jet1_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[1][2],{"test_jet1_pT","x2"});
+  make_root_hists<1>(h_p1pT_p2x[2][0],{"test_jet2_pT","xH"});
+  make_root_hists<1>(h_p1pT_p2x[2][1],{"test_jet2_pT","x1"});
+  make_root_hists<1>(h_p1pT_p2x[2][2],{"test_jet2_pT","x2"});
+
+  // test( burst<1>(h_p1pT_p2x[0][0]) );
+  // test( burst<1>(h_p1pT_p2x[0][1]) );
+  // test( burst<1>(h_p1pT_p2x[0][2]) );
+  // test( burst<1>(h_p1pT_p2x[1][0]) );
+  // test( burst<1>(h_p1pT_p2x[1][1]) );
+  // test( burst<1>(h_p1pT_p2x[1][2]) );
+  // test( burst<1>(h_p1pT_p2x[2][0]) );
+  // test( burst<1>(h_p1pT_p2x[2][1]) );
+  // test( burst<1>(h_p1pT_p2x[2][2]) );
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

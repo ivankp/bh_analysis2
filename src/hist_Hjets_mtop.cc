@@ -63,6 +63,15 @@ struct dijet {
     mass(p.M()) {}
 };
 
+enum isp_t { gg, gq, qq };
+isp_t get_isp(Int_t id1, Int_t id2) noexcept {
+  bool g1 = (id1 == 21);
+  bool g2 = (id2 == 21);
+  if (g1 && g1) return gg;
+  else if ((!g1) && (!g2)) return qq;
+  else return gq;
+}
+
 struct hist_bin {
   static double weight;
   double w, w2;
@@ -255,7 +264,19 @@ int main(int argc, char* argv[])
   re_hist<3>
     h_xH_HT_maxdy(a__x, a__HT, a__maxdy),
     h_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_x2_HT_maxdy(a__x, a__HT, a__maxdy);
+    h_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+
+    h_gg_xH_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gg_x1_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gg_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+
+    h_gq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gq_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+
+    h_qq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_qq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_qq_x2_HT_maxdy(a__x, a__HT, a__maxdy);
 
   // p1's pT in bins of p2's x
   std::array<std::array< re_hist<2>, 3>,3> h_p1pT_p2x;
@@ -297,6 +318,8 @@ int main(int argc, char* argv[])
     if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
     // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
   }
+  TTreeReaderValue<Int_t> _id1(reader,"id1");
+  TTreeReaderValue<Int_t> _id2(reader,"id2");
 
   std::vector<fj::PseudoJet> particles;
   Int_t prev_id = -1, curr_id;
@@ -401,9 +424,9 @@ int main(int argc, char* argv[])
 
     // HT fraction x in bins on HT and max rapidity separation
     const double xH = H_pT/HT, x1 = jets[0].pT/HT, x2 = jets[1].pT/HT;
-    h_xH_HT_maxdy(xH, HT, max_dy);
-    h_x1_HT_maxdy(x1, HT, max_dy);
-    h_x2_HT_maxdy(x2, HT, max_dy);
+    const auto xH_HT_maxdy_bin = h_xH_HT_maxdy(xH, HT, max_dy);
+    const auto x1_HT_maxdy_bin = h_x1_HT_maxdy(x1, HT, max_dy);
+    const auto x2_HT_maxdy_bin = h_x2_HT_maxdy(x2, HT, max_dy);
 
     // p1's pT in bins of p2's x
     h_p1pT_p2x[0][0](H_pT, xH);
@@ -419,6 +442,21 @@ int main(int argc, char* argv[])
     h_xH_x1_HT(xH,x1,HT);
     h_xH_x2_HT(xH,x2,HT);
     h_x1_x2_HT(x1,x2,HT);
+
+    const auto isp = get_isp(*_id1, *_id2);
+    if (isp == gg) {
+      h_gg_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
+      h_gg_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
+      h_gg_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+    } else if (isp == gq) {
+      h_gq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
+      h_gq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
+      h_gq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+    } else {
+      h_qq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
+      h_qq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
+      h_qq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+    }
 
     // Jet pair with highest pT .....................................
     const dijet jjpT(jets[0],jets[1]);
@@ -488,6 +526,18 @@ int main(int argc, char* argv[])
   make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
   make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
   make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
+
+  make_root_hists<1>(h_gg_xH_HT_maxdy,{"gg_xH","HT","maxdy"});
+  make_root_hists<1>(h_gg_x1_HT_maxdy,{"gg_x1","HT","maxdy"});
+  make_root_hists<1>(h_gg_x2_HT_maxdy,{"gg_x2","HT","maxdy"});
+
+  make_root_hists<1>(h_gq_xH_HT_maxdy,{"gq_xH","HT","maxdy"});
+  make_root_hists<1>(h_gq_x1_HT_maxdy,{"gq_x1","HT","maxdy"});
+  make_root_hists<1>(h_gq_x2_HT_maxdy,{"gq_x2","HT","maxdy"});
+
+  make_root_hists<1>(h_qq_xH_HT_maxdy,{"qq_xH","HT","maxdy"});
+  make_root_hists<1>(h_qq_x1_HT_maxdy,{"qq_x1","HT","maxdy"});
+  make_root_hists<1>(h_qq_x2_HT_maxdy,{"qq_x2","HT","maxdy"});
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

@@ -271,18 +271,14 @@ int main(int argc, char* argv[])
   // ================================================================
 
   // Open input ntuple root file
-  auto fin = std::make_unique<TFile>(argv[1],"read");
-  if (fin->IsZombie()) return 1;
+  TChain chain("t3");
+  for (int i=2; i<argc; ++i) { chain.Add(argv[i]); }
 
   // Set up branches for reading
-  TTreeReader reader("t3",fin.get());
-  if (!reader.GetTree()) {
-    cerr << "\033[31mNo tree \"t3\" in file "
-         << argv[1] <<"\033[0m"<< endl;
-    return 1;
-  }
+  TTreeReader reader(&chain);
 
-  using p4_t = Float_t;
+  // using p4_t = Float_t;
+  using p4_t = Double_t;
   TTreeReaderValue<Int_t> _id(reader,"id");
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
@@ -459,7 +455,7 @@ int main(int argc, char* argv[])
   cout << "ncount: " << ncount << endl;
 
   // Open input ntuple root file
-  auto fout = std::make_unique<TFile>(argv[2],"recreate");
+  auto fout = std::make_unique<TFile>(argv[1],"recreate");
   if (fout->IsZombie()) return 1;
 
   fout->mkdir("weight2_JetAntiKt4")->cd();

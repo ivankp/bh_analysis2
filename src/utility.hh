@@ -22,6 +22,15 @@ struct named {
   inline type* operator->() const noexcept { return p; }
 };
 
+#ifdef _GLIBCXX_VECTOR
+template <typename T>
+auto reserve(size_t n) {
+  std::vector<T> _v;
+  _v.reserve(n);
+  return _v;
+}
+#endif
+
 }
 
 #endif

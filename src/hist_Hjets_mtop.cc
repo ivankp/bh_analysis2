@@ -27,6 +27,7 @@
 #include "timed_counter.hh"
 #include "catstr.hh"
 #include "exception.hh"
+#include "float_or_double_reader.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -38,6 +39,7 @@ using std::cerr;
 using std::endl;
 
 using ivanp::cat;
+using ivanp::reserve;
 
 namespace fj = fastjet;
 using namespace ivanp::math;
@@ -225,12 +227,12 @@ int main(int argc, char* argv[])
 
   h_(HT) h_(H_pT) h_(H_y) h_(H_eta) h_(H_phi) h_(H_mass)
 
-  std::vector<re_hist<1>> h_jet_pT, h_jet_y, h_jet_eta, h_jet_phi, h_jet_mass;
-    h_jet_pT.reserve(need_njets+1);
-    h_jet_y.reserve(need_njets+1);
-    h_jet_eta.reserve(need_njets+1);
-    h_jet_phi.reserve(need_njets+1);
-    h_jet_mass.reserve(need_njets+1);
+  auto h_jet_pT   = reserve<re_hist<1>>(need_njets+1);
+  auto h_jet_y    = reserve<re_hist<1>>(need_njets+1);
+  auto h_jet_eta  = reserve<re_hist<1>>(need_njets+1);
+  auto h_jet_phi  = reserve<re_hist<1>>(need_njets+1);
+  auto h_jet_mass = reserve<re_hist<1>>(need_njets+1);
+
   for (unsigned i=0; i<need_njets+1; ++i) {
     auto name = cat("jet",i+1,"_pT");
     h_jet_pT.emplace_back(name,ra[name]);
@@ -298,16 +300,16 @@ int main(int argc, char* argv[])
   // Set up branches for reading
   TTreeReader reader(&chain);
 
-  // using p4_t = Float_t;
-  using p4_t = Double_t;
   TTreeReaderValue<Int_t> _id(reader,"id");
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
-  TTreeReaderArray<p4_t>  _px(reader,"px");
-  TTreeReaderArray<p4_t>  _py(reader,"py");
-  TTreeReaderArray<p4_t>  _pz(reader,"pz");
-  TTreeReaderArray<p4_t>  _E (reader,"E");
   TTreeReaderValue<Double_t> _weight(reader,"weight");
+
+  float_or_double_array_reader _px(reader,"px");
+  float_or_double_array_reader _py(reader,"py");
+  float_or_double_array_reader _pz(reader,"pz");
+  float_or_double_array_reader _E (reader,"E" );
+
   boost::optional<TTreeReaderValue<Int_t>> _ncount;
   // boost::optional<TTreeReaderValue<Char_t>> _part;
   for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {

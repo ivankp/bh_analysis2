@@ -4,16 +4,11 @@
 #include <TLeaf.h>
 
 bool branch_is_double(TTree* t, const char* branchname) {
-  const char *branchtype = t->FindLeaf(branchname)->ClassName();
-  const unsigned pos = strlen(branchtype) - 1;
-  if (branchtype[pos]=='D') return true;
-  else if (branchtype[pos]=='F') return false;
+  const char *branchtype = t->GetLeaf(branchname)->GetTypeName();
+  if (!strcmp(branchtype,"Double_t")) return true;
+  else if (!strcmp(branchtype,"Float_t")) return false;
   else throw ivanp::exception(
     "The type of branch ",branchname," is ",branchtype);
-  // if (!strcmp(branchname,"Double_t")) return true;
-  // else if (!strcmp(branchname,"Float_t")) return false;
-  // else throw ivanp::exception(
-  //   "The type of branch ",branchname," is ",branchtype);
 }
 
 class float_or_double_value_reader {

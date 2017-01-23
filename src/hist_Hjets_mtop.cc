@@ -263,6 +263,23 @@ int main(int argc, char* argv[])
   // histograms for mtop study
   a_(_x) a_(_HT) a_(_maxdy) a_(_pT) a_(_x2)
 
+  re_hist<2>
+    h_xH_HT(a__x, a__HT),
+    h_x1_HT(a__x, a__HT),
+    h_x2_HT(a__x, a__HT),
+
+    h_gg_xH_HT(a__x, a__HT),
+    h_gg_x1_HT(a__x, a__HT),
+    h_gg_x2_HT(a__x, a__HT),
+
+    h_gq_xH_HT(a__x, a__HT),
+    h_gq_x1_HT(a__x, a__HT),
+    h_gq_x2_HT(a__x, a__HT),
+
+    h_qq_xH_HT(a__x, a__HT),
+    h_qq_x1_HT(a__x, a__HT),
+    h_qq_x2_HT(a__x, a__HT);
+
   re_hist<3>
     h_xH_HT_maxdy(a__x, a__HT, a__maxdy),
     h_x1_HT_maxdy(a__x, a__HT, a__maxdy),
@@ -422,6 +439,11 @@ int main(int argc, char* argv[])
 
     // HT fraction x in bins on HT and max rapidity separation
     const double xH = H_pT/HT, x1 = jets[0].pT/HT, x2 = jets[1].pT/HT;
+
+    const auto xH_HT_bin = h_xH_HT(xH, HT);
+    const auto x1_HT_bin = h_x1_HT(x1, HT);
+    const auto x2_HT_bin = h_x2_HT(x2, HT);
+
     const auto xH_HT_maxdy_bin = h_xH_HT_maxdy(xH, HT, max_dy);
     const auto x1_HT_maxdy_bin = h_x1_HT_maxdy(x1, HT, max_dy);
     const auto x2_HT_maxdy_bin = h_x2_HT_maxdy(x2, HT, max_dy);
@@ -443,14 +465,26 @@ int main(int argc, char* argv[])
 
     const auto isp = get_isp(*_id1, *_id2);
     if (isp == gg) {
+      h_gg_xH_HT.fill_bin(xH_HT_bin);
+      h_gg_x1_HT.fill_bin(x1_HT_bin);
+      h_gg_x2_HT.fill_bin(x2_HT_bin);
+
       h_gg_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
       h_gg_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
       h_gg_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
     } else if (isp == gq) {
+      h_gq_xH_HT.fill_bin(xH_HT_bin);
+      h_gq_x1_HT.fill_bin(x1_HT_bin);
+      h_gq_x2_HT.fill_bin(x2_HT_bin);
+
       h_gq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
       h_gq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
       h_gq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
     } else {
+      h_qq_xH_HT.fill_bin(xH_HT_bin);
+      h_qq_x1_HT.fill_bin(x1_HT_bin);
+      h_qq_x2_HT.fill_bin(x2_HT_bin);
+
       h_qq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
       h_qq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
       h_qq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
@@ -507,9 +541,9 @@ int main(int argc, char* argv[])
 
   for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
 
-  make_root_hists<1>(h_xH_HT_maxdy,{"xH","HT","maxdy"});
-  make_root_hists<1>(h_x1_HT_maxdy,{"x1","HT","maxdy"});
-  make_root_hists<1>(h_x2_HT_maxdy,{"x2","HT","maxdy"});
+  make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
+  make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
+  make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
 
   make_root_hists<1>(h_p1pT_p2x[0][0],{   "H_pT","xH"});
   make_root_hists<1>(h_p1pT_p2x[0][1],{   "H_pT","x1"});
@@ -521,9 +555,25 @@ int main(int argc, char* argv[])
   make_root_hists<1>(h_p1pT_p2x[2][1],{"jet2_pT","x1"});
   make_root_hists<1>(h_p1pT_p2x[2][2],{"jet2_pT","x2"});
 
-  make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
-  make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
-  make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
+  make_root_hists<1>(h_xH_HT,{"xH","HT"});
+  make_root_hists<1>(h_x1_HT,{"x1","HT"});
+  make_root_hists<1>(h_x2_HT,{"x2","HT"});
+
+  make_root_hists<1>(h_xH_HT_maxdy,{"xH","HT","maxdy"});
+  make_root_hists<1>(h_x1_HT_maxdy,{"x1","HT","maxdy"});
+  make_root_hists<1>(h_x2_HT_maxdy,{"x2","HT","maxdy"});
+
+  make_root_hists<1>(h_gg_xH_HT,{"gg_xH","HT"});
+  make_root_hists<1>(h_gg_x1_HT,{"gg_x1","HT"});
+  make_root_hists<1>(h_gg_x2_HT,{"gg_x2","HT"});
+
+  make_root_hists<1>(h_gq_xH_HT,{"gq_xH","HT"});
+  make_root_hists<1>(h_gq_x1_HT,{"gq_x1","HT"});
+  make_root_hists<1>(h_gq_x2_HT,{"gq_x2","HT"});
+
+  make_root_hists<1>(h_qq_xH_HT,{"qq_xH","HT"});
+  make_root_hists<1>(h_qq_x1_HT,{"qq_x1","HT"});
+  make_root_hists<1>(h_qq_x2_HT,{"qq_x2","HT"});
 
   make_root_hists<1>(h_gg_xH_HT_maxdy,{"gg_xH","HT","maxdy"});
   make_root_hists<1>(h_gg_x1_HT_maxdy,{"gg_x1","HT","maxdy"});

@@ -6,16 +6,16 @@
 namespace ivanp {
 
 template <typename T>
-struct named {
+struct named_ptr {
   using type = T;
   type *p;
   std::string name;
 
-  named(): p(nullptr), name() { }
-  named(const named& n) = default;
-  named(named&& n) = default;
+  named_ptr(): p(nullptr), name() { }
+  named_ptr(const named_ptr& n) = default;
+  named_ptr(named_ptr&& n) = default;
   template <typename P, typename N>
-  named(P&& ptr, N&& name)
+  named_ptr(P&& ptr, N&& name)
   : p(std::forward<P>(ptr)), name(std::forward<N>(name)) { }
 
   inline type& operator*() const noexcept { return *p; }

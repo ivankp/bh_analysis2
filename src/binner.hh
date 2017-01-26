@@ -50,7 +50,8 @@ public:
   using index_array_type = std::array<size_type,naxes>;
   using index_array_cref = const index_array_type&;
 
-  static std::vector<named<binner>> all;
+  using named_ptr_type = named_ptr<binner>;
+  static std::vector<named_ptr_type> all;
 
 private:
   axes_tuple _axes;
@@ -139,6 +140,7 @@ private:
   template <typename T, typename... TT>
   constexpr size_type index_impl(T i, TT... ii) const noexcept {
     return i + (axis<naxes-sizeof...(TT)-1>().nbins()
+             + axis_spec<naxes-sizeof...(TT)-1>::nover::value
              - !axis_spec<naxes-sizeof...(TT)-1>::under::value)
       * index_impl(ii...);
   }
@@ -184,6 +186,10 @@ public:
     _axes = std::move(o._axes);
     _bins = std::move(o._bins);
     return *this;
+  }
+  binner(const std::string& name, const binner& o)
+  : _axes(o._axes), _bins(o._bins) {
+    all.emplace_back(this,name);
   }
 
   template <unsigned I=0>
@@ -278,7 +284,7 @@ public:
 };
 
 template <typename B, typename... A, typename C, typename F>
-std::vector<named<binner<B,std::tuple<A...>,C,F>>>
+std::vector<typename binner<B,std::tuple<A...>,C,F>::named_ptr_type>
 binner<B,std::tuple<A...>,C,F>::all;
 
 } // end namespace ivanp

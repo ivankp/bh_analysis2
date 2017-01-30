@@ -308,6 +308,11 @@ int main(int argc, char* argv[])
     h_xH_x2_HT(a__x3,a__x3,a__HT),
     h_x1_x2_HT(a__x3,a__x3,a__HT);
 
+  // maxdy vs maxdphi in bins of HT
+  a_(_maxdy2) a_(_maxdphi2)
+  re_hist<3>
+    h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
+
   // ================================================================
 
   // Open input ntuple root file
@@ -404,6 +409,7 @@ int main(int argc, char* argv[])
     for (const auto& j : jets) HT += j.pT;
 
     double H_y = higgs->Rapidity();
+    double H_phi = higgs->Phi();
     // --------------------------------------------------------------
 
     ++num_selected;
@@ -414,7 +420,7 @@ int main(int argc, char* argv[])
     h_H_pT(H_pT);
     h_H_y(H_y);
     h_H_eta(higgs->Eta());
-    h_H_phi(higgs->Phi());
+    h_H_phi(H_phi);
     h_H_mass(higgs->M());
 
     // jet histograms
@@ -433,6 +439,15 @@ int main(int argc, char* argv[])
         larger(max_dy,abs(jets[i].y-jets[j].y));
       }
       larger(max_dy,abs(jets[i].y-H_y));
+    }
+
+    // find maximum phi separation in the event
+    double max_dphi = dphi(jets[0].phi,H_phi);
+    for (unsigned i=1; i<njets; ++i) {
+      for (unsigned j=0; j<i; ++j) {
+        larger(max_dphi,dphi(jets[i].phi,jets[j].phi));
+      }
+      larger(max_dphi,dphi(jets[i].phi,H_phi));
     }
 
     if (njets<2) continue; // 222222222222222222222222222222222222222
@@ -462,6 +477,8 @@ int main(int argc, char* argv[])
     h_xH_x1_HT(xH,x1,HT);
     h_xH_x2_HT(xH,x2,HT);
     h_x1_x2_HT(x1,x2,HT);
+
+    h_maxdy_maxdphi_HT(max_dy,max_dphi,HT);
 
     const auto isp = get_isp(*_id1, *_id2);
     if (isp == gg) {
@@ -544,6 +561,8 @@ int main(int argc, char* argv[])
   make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
   make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
   make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
+
+  make_root_hists<2>(h_maxdy_maxdphi_HT,{"maxdy_maxdphi","HT"});
 
   make_root_hists<1>(h_p1pT_p2x[0][0],{   "H_pT","xH"});
   make_root_hists<1>(h_p1pT_p2x[0][1],{   "H_pT","x1"});

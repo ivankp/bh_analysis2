@@ -249,14 +249,15 @@ public:
 
 // Index Axis =======================================================
 
-template <bool Inherit=false>
+template <typename EdgeType = ivanp::axis_size_type, bool Inherit=false>
 class index_axis final: public std::conditional_t<Inherit,
   abstract_axis<ivanp::axis_size_type>, axis_base>
 {
+  static_assert(std::is_integral<EdgeType>::value,"");
 public:
   using base_type = std::conditional_t<Inherit,
     abstract_axis<ivanp::axis_size_type>, axis_base>;
-  using edge_type = ivanp::axis_size_type;
+  using edge_type = EdgeType;
   using edge_cref = const_ref_if_not_scalar_t<edge_type>;
   using size_type = ivanp::axis_size_type;
 

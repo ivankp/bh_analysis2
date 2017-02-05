@@ -260,6 +260,27 @@ int main(int argc, char* argv[])
   h_(jjpT_dphi)  h_(jjfb_dphi)
   h_(jjpT_mass)  h_(jjfb_mass)
 
+  // histograms from HGamma analysis
+  h_(hgam_pT_yy)
+  h_(hgam_yAbs_yy)
+  // h_(hgam_cosTS_yy)
+  // h_(hgam_pTt_yy)
+
+  h_(hgam_HT)
+
+  h_(hgam_pT_j1) h_(hgam_pT_j2)
+  h_(hgam_yAbs_j1) h_(hgam_yAbs_j2)
+
+  // h_(hgam_sumTau_yyj)
+  // h_(hgam_maxTau_yyj)
+
+  h_(hgam_Dphi_j_j) //h_(hgam_Dphi_j_j_signed)
+  h_(hgam_Dy_j_j)
+  h_(hgam_m_jj)
+
+  h_(hgam_pT_yyjj)
+  h_(hgam_Dphi_yy_jj)
+
   // histograms for mtop study
   a_(_x) a_(_HT) a_(_maxdy) a_(_pT) a_(_x2)
 
@@ -423,6 +444,10 @@ int main(int argc, char* argv[])
     h_H_phi(H_phi);
     h_H_mass(higgs->M());
 
+    h_hgam_pT_yy(H_pT);
+    h_hgam_yAbs_yy(std::abs(H_y));
+    h_hgam_HT(HT);
+
     // jet histograms
     for (unsigned i=0, n=std::min(njets,need_njets+1); i<n; ++i) {
       h_jet_pT  [i](jets[i].pT  );
@@ -449,6 +474,11 @@ int main(int argc, char* argv[])
       }
       larger(max_dphi,dphi(jets[i].phi,H_phi));
     }
+
+    if (njets<1) continue; // 111111111111111111111111111111111111111
+
+    h_hgam_pT_j1(jets[0].pT);
+    h_hgam_yAbs_j1(std::abs(jets[0].y));
 
     if (njets<2) continue; // 222222222222222222222222222222222222222
 
@@ -537,6 +567,18 @@ int main(int argc, char* argv[])
     h_jjfb_mass(jjfb.mass);
     // ..............................................................
 
+    h_hgam_pT_j2(jets[1].pT);
+    h_hgam_yAbs_j2(std::abs(jets[1].y));
+
+    h_hgam_Dphi_j_j(jjpT.dphi);
+    h_hgam_Dy_j_j(jjpT.dy);
+    h_hgam_m_jj(jjpT.mass);
+
+    const auto Hjj = *higgs + jjpT.p;
+
+    h_hgam_pT_yyjj(Hjj.Pt());
+    h_hgam_Dphi_yy_jj(dphi(H_phi,jjpT.p.Phi()));
+
     // --------------------------------------------------------------
   } // END EVENT LOOP
   // ****************************************************************
@@ -545,7 +587,7 @@ int main(int argc, char* argv[])
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << endl;
 
-  // Open input ntuple root file
+  // Open output root file for histograms
   auto fout = std::make_unique<TFile>(argv[1],"recreate");
   if (fout->IsZombie()) return 1;
 

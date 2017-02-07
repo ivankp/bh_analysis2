@@ -392,7 +392,7 @@ struct histogram_handler {
     auto fout = std::make_unique<TFile>(root_file,"recreate");
     if (fout->IsZombie()) throw ivanp::exception(
       "cannot open output root file ", root_file);
-    cout << "\033[36mOutput\033[0m: " << fout->GetName() << endl;
+    cout << "\033[32mOutput\033[0m: " << fout->GetName() << endl;
 
     fout->mkdir("weight2_JetAntiKt4")->cd();
 
@@ -796,6 +796,7 @@ int main(int argc, char* argv[]) {
   hh->write(argv[1]);
   delete hh;
 
+  cout << endl;
   return 0;
 }
 

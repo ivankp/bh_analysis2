@@ -768,16 +768,15 @@ int main(int argc, char* argv[]) {
   
   { // READING ******************************************************
     // Open input ntuple root files
-    TChain chain("t3");
-    // auto chain = std::make_unique<TChain>("t3");
+    auto chain = std::make_unique<TChain>("t3");
     for (int i=2; i<argc; ++i) {
-      chain.Add(argv[i]);
+      chain->Add(argv[i]);
       cout << "\033[36mInput\033[0m: " << argv[i] << endl;
     }
     cout << endl;
 
     cout << "Running in " << NPROC << " threads" << endl;
-    new event_reader(&chain);
+    new event_reader(chain.get());
 
     // threads ......................................................
     std::array<std::thread,NPROC> threads;

@@ -59,7 +59,7 @@ const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
 const double jet_pt_cut = 30., jet_eta_cut = 4.4;
 const unsigned need_njets = 2;
 
-event_reader *ent = nullptr;
+event_reader *reader = nullptr;
 histogram_handler *hh = nullptr;
 
 std::atomic_ullong ncount(0), num_events(0), num_selected(0);
@@ -459,9 +459,18 @@ struct histogram_handler {
 
 // EVENT READER =====================================================
 
+struct entry {
+  Int_t id, nparticle, id1, id2, ncount;
+  Double_t weight;
+  struct {
+    Double_t px, py, pz, E;
+    Int_t kf;
+  } p[8];
+};
+
 struct event_reader {
   // Set up branches for reading
-  TTreeReader reader;
+  TTreeReader _reader;
 
   TTreeReaderValue<Int_t> id, nparticle, id1, id2;
   TTreeReaderArray<Int_t> kf;
@@ -471,36 +480,48 @@ struct event_reader {
   // boost::optional<TTreeReaderValue<Char_t>> part;
 
   event_reader(TTree* tree)
-  : reader(tree),
-    id(reader,"id"), nparticle(reader,"nparticle"),
-    id1(reader,"id1"), id2(reader,"id2"), kf(reader,"kf"),
-    weight(reader,"weight"),
-    px(reader,"px"), py(reader,"py"), pz(reader,"pz"), E(reader,"E" )
+  : _reader(tree),
+    id(_reader,"id"), nparticle(_reader,"nparticle"),
+    id1(_reader,"id1"), id2(_reader,"id2"), kf(_reader,"kf"),
+    weight(_reader,"weight"),
+    px(_reader,"px"), py(_reader,"py"), pz(_reader,"pz"), E(_reader,"E" )
   {
-    for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
-      if (!strcmp(bo->GetName(),"ncount")) ncount.emplace(reader,"ncount");
+    for ( auto bo : *_reader.GetTree()->GetListOfBranches() ) {
+      if (!strcmp(bo->GetName(),"ncount")) ncount.emplace(_reader,"ncount");
       // else if (!strcmp(bo->GetName(),"part")) part.emplace(reader,"part");
     }
-    ent = this;
+    reader = this;
   }
 
-  inline bool next() { return reader.Next(); }
+  inline bool next(entry& e) {
+    if (_reader.Next()) {
+      e.id = *id;
+      const auto n = (e.nparticle = *nparticle);
+      e.id1 = *id1;
+      e.id2 = *id2;
+      e.ncount = ( ncount ? **ncount : 1);
+      e.weight = *weight;
+      for (Int_t i=0; i<n; ++i) {
+        auto& p = e.p[i];
+        p.px = px[i];
+        p.py = py[i];
+        p.pz = pz[i];
+        p.E  = E [i];
+        p.kf = kf[i];
+      }
+      return true;
+    }
+    return false;
+  }
 };
 
 // EVENT HANDLER ====================================================
 
 class event_handler {
   unsigned short t;
+  entry ent;
   static std::mutex mut_next, mut_cnt;
 
-  // class recur_at_exit {
-  //   event_handler *p;
-  //   typedef void(event_handler::*fcn_type)(void);
-  //   fcn_type f;
-  // public:
-  //   recur_at_exit(event_handler* p, fcn_type f): p(p), f(f) { }
-  //   ~recur_at_exit() { (p->*f)(); } // call the function on destruction
-  // };
   struct recursion {
     event_handler *p;
     ~recursion() { (*p)(); }
@@ -511,10 +532,12 @@ public:
 
   void operator()() {
     mut_next.lock();
-    const bool good_next = ent->next();
+    const bool good_next = reader->next(ent);
     mut_next.unlock();
     if (!good_next) return;
     recursion recur{this};
+
+    cout << t << " " << __LINE__ << endl;
 
     // **************************************************************
 
@@ -529,20 +552,19 @@ public:
       ++num_events;
     }
     */
-    ncount += ( ent->ncount ? **ent->ncount : 1);
     ++num_events;
     // --------------------------------------------------------------
 
-    const auto nparticle = *ent->nparticle;
-    auto particles = reserve<fj::PseudoJet>(nparticle);
+    auto particles = reserve<fj::PseudoJet>(ent.nparticle);
     boost::optional<TLorentzVector> higgs;
 
     // Read particles -----------------------------------------------
-    for (int i=0; i<nparticle; ++i) {
-      if (ent->kf[i] == 25) {
-        higgs.emplace(ent->px[i],ent->py[i],ent->pz[i],ent->E[i]);
+    for (int i=0; i<ent.nparticle; ++i) {
+      auto& p = ent.p[i];
+      if (p.kf == 25) {
+        higgs.emplace(p.px,p.py,p.pz,p.E);
       } else {
-        particles.emplace_back(ent->px[i],ent->py[i],ent->pz[i],ent->E[i]);
+        particles.emplace_back(p.px,p.py,p.pz,p.E);
       }
     }
     if (!higgs) throw ivanp::exception("no Higgs in entry ",cnt);
@@ -565,7 +587,7 @@ public:
     const unsigned njets = fj_jets.size();
     // --------------------------------------------------------------
 
-    hist_bin::weight[t] = *ent->weight; // Read weight
+    hist_bin::weight[t] = ent.weight; // Read weight
 
     // Fill Njets histograms before cuts
     hh->h_Njets.fill_bin(njets+1, t); // njets+1 because njets==0 is bin 1
@@ -666,7 +688,7 @@ public:
 
     hh->h_maxdy_maxdphi_HT(max_dy,max_dphi,HT, t);
 
-    const auto isp = get_isp(*ent->id1, *ent->id2);
+    const auto isp = get_isp(ent.id1, ent.id2);
     if (isp == gg) {
       hh->h_gg_xH_HT.fill_bin(xH_HT_bin, t);
       hh->h_gg_x1_HT.fill_bin(x1_HT_bin, t);
@@ -747,6 +769,9 @@ std::mutex event_handler::mut_next, event_handler::mut_cnt;
 // MAIN =============================================================
 
 int main(int argc, char* argv[]) {
+  fastjet::ClusterSequence::print_banner(); // get it out of the way
+  cout << endl;
+
   // Open input ntuple root files
   TChain chain("t3");
   for (int i=2; i<argc; ++i) {
@@ -754,16 +779,17 @@ int main(int argc, char* argv[]) {
     cout << "Input: " << argv[i] << endl;
   }
 
-  event_reader _ent(&chain);
+  event_reader _reader(&chain);
   histogram_handler _hh("Hjets_mtop.bins");
 
   // THREADS ********************************************************
   cout << "Running in " << NPROC << " threads" << endl;
-  cnt.set(_ent.reader.GetEntries(true)); // start timed counter
+  cnt.set(_reader._reader.GetEntries(true)); // start timed counter
 
   std::array<std::thread,NPROC> threads;
   for (unsigned short i=0; i<NPROC; ++i)
-    (threads[i] = std::thread{ event_handler(i) }).join();
+    threads[i] = std::thread{ event_handler(i) };
+  for (auto& thread : threads) thread.join();
   // ****************************************************************
 
   cout << "Selected entries: " << num_selected << endl;

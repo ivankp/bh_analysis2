@@ -36,6 +36,7 @@ private:
 
   static const std::locale cnt_locale;
 
+public:
   void print() {
     using std::cout;
     using std::setw;
@@ -80,8 +81,15 @@ private:
       if (!past1s) past1s = true;
     }
   }
+  void print_last() {
+    print();
+    if (!past1s) {
+      std::chrono::duration<double,std::milli> ms(clock_type::now() - start);
+      std::cout << "\b\b\b" << int(ms.count()) << "ms";
+    }
+    std::cout << std::endl;
+  }
 
-public:
   timed_counter() { }
   timed_counter(value_type i, value_type n)
   : cnt(i), cnt_start(i), cnt_end(n), start(clock_type::now()), last(start),
@@ -91,14 +99,7 @@ public:
   : cnt(0), cnt_start(0), cnt_end(n), start(clock_type::now()), last(start),
     past1s(false), nb(30)
   { print(); }
-  ~timed_counter() {
-    print();
-    if (!past1s) {
-      std::chrono::duration<double,std::milli> ms(clock_type::now() - start);
-      std::cout << "\b\b\b" << int(ms.count()) << "ms";
-    }
-    std::cout << std::endl;
-  }
+  ~timed_counter() { print_last(); }
 
   void set(value_type i, value_type n) {
     cnt = i;

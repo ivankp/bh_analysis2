@@ -63,8 +63,6 @@ event_reader *reader = nullptr;
 histogram_handler *hh = nullptr;
 
 std::atomic_ullong ncount(0), num_events(0), num_selected(0);
-
-ivanp::timed_counter<Long64_t> cnt;
 // ==================================================================
 
 struct Jet {
@@ -353,6 +351,10 @@ struct histogram_handler {
 
   // Constructor ----------------------------------------------------
   histogram_handler(const std::string& bins_file): ra(bins_file) {
+    if (hh) throw ivanp::exception(
+      "do not construct more than one `histogram_handler`");
+    hh = this;
+
     h_jet_pT  .reserve(need_njets+1);
     h_jet_y   .reserve(need_njets+1);
     h_jet_eta .reserve(need_njets+1);
@@ -383,8 +385,6 @@ struct histogram_handler {
 
     // p1's pT in bins of p2's x
     for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
-
-    hh = this;
   }
 
   void write(const char* root_file) {
@@ -392,7 +392,7 @@ struct histogram_handler {
     auto fout = std::make_unique<TFile>(root_file,"recreate");
     if (fout->IsZombie()) throw ivanp::exception(
       "cannot open output root file ", root_file);
-    cout << "Output file: " << fout->GetName() << endl;
+    cout << "\033[36mOutput\033[0m: " << fout->GetName() << endl;
 
     fout->mkdir("weight2_JetAntiKt4")->cd();
 
@@ -471,6 +471,7 @@ struct entry {
 struct event_reader {
   // Set up branches for reading
   TTreeReader _reader;
+  ivanp::timed_counter<Long64_t> cnt;
 
   TTreeReaderValue<Int_t> id, nparticle, id1, id2;
   TTreeReaderArray<Int_t> kf;
@@ -479,22 +480,29 @@ struct event_reader {
   boost::optional<TTreeReaderValue<Int_t>> ncount;
   // boost::optional<TTreeReaderValue<Char_t>> part;
 
+  static std::mutex mut_next;
+
   event_reader(TTree* tree)
-  : _reader(tree),
+  : _reader(tree), cnt(tree->GetEntries()),
     id(_reader,"id"), nparticle(_reader,"nparticle"),
     id1(_reader,"id1"), id2(_reader,"id2"), kf(_reader,"kf"),
     weight(_reader,"weight"),
     px(_reader,"px"), py(_reader,"py"), pz(_reader,"pz"), E(_reader,"E" )
   {
+    if (reader) throw ivanp::exception(
+      "do not construct more than one `histogram_handler`");
+    reader = this;
+
     for ( auto bo : *_reader.GetTree()->GetListOfBranches() ) {
       if (!strcmp(bo->GetName(),"ncount")) ncount.emplace(_reader,"ncount");
       // else if (!strcmp(bo->GetName(),"part")) part.emplace(reader,"part");
     }
-    reader = this;
   }
 
   inline bool next(entry& e) {
-    if (_reader.Next()) {
+    mut_next.lock();
+    const bool next_ok = _reader.Next();
+    if (next_ok) {
       e.id = *id;
       const auto n = (e.nparticle = *nparticle);
       e.id1 = *id1;
@@ -509,36 +517,24 @@ struct event_reader {
         p.E  = E [i];
         p.kf = kf[i];
       }
-      return true;
+      ++cnt;
     }
-    return false;
+    mut_next.unlock();
+    return next_ok;
   }
 };
+std::mutex event_reader::mut_next;
 
 // EVENT HANDLER ====================================================
 
 class event_handler {
   unsigned short t;
   entry ent;
-  static std::mutex mut_next, mut_cnt;
-
-  struct recursion {
-    event_handler *p;
-    ~recursion() { (*p)(); }
-  };
 
 public:
   event_handler(unsigned thread_id): t(thread_id) { }
 
-  void operator()() {
-    mut_next.lock();
-    const bool good_next = reader->next(ent);
-    mut_next.unlock();
-    if (!good_next) return;
-    recursion recur{this};
-
-    cout << t << " " << __LINE__ << endl;
-
+  void operator()() { while (reader->next(ent)) {
     // **************************************************************
 
     // Keep track of multi-entry events -----------------------------
@@ -552,6 +548,7 @@ public:
       ++num_events;
     }
     */
+    ncount += ent.ncount;
     ++num_events;
     // --------------------------------------------------------------
 
@@ -567,7 +564,7 @@ public:
         particles.emplace_back(p.px,p.py,p.pz,p.E);
       }
     }
-    if (!higgs) throw ivanp::exception("no Higgs in entry ",cnt);
+    if (!higgs) throw ivanp::exception("no Higgs in entry ",reader->cnt);
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------
@@ -594,7 +591,7 @@ public:
     // --------------------------------------------------------------
 
     // Apply event cuts ---------------------------------------------
-    if (njets < need_njets) return; // at least needed number of jets
+    if (njets < need_njets) continue; // at least needed number of jets
     // --------------------------------------------------------------
 
     // Define variables ---------------------------------------------
@@ -653,12 +650,12 @@ public:
       larger(max_dphi,dphi(jets[i].phi,H_phi));
     }
 
-    if (njets<1) return; // 11111111111111111111111111111111111111111
+    if (njets<1) continue; // 111111111111111111111111111111111111111
 
     hh->h_hgam_pT_j1(jets[0].pT, t);
     hh->h_hgam_yAbs_j1(std::abs(jets[0].y), t);
 
-    if (njets<2) return; // 22222222222222222222222222222222222222222
+    if (njets<2) continue; // 222222222222222222222222222222222222222
 
     // HT fraction x in bins on HT and max rapidity separation
     const double xH = H_pT/HT, x1 = jets[0].pT/HT, x2 = jets[1].pT/HT;
@@ -758,13 +755,8 @@ public:
     hh->h_hgam_Dphi_yy_jj(dphi(H_phi,jjpT.p.Phi()), t);
 
     // **************************************************************
-
-    mut_cnt.lock();
-    ++cnt;
-    mut_cnt.unlock();
-  }
+  }}
 };
-std::mutex event_handler::mut_next, event_handler::mut_cnt;
 
 // MAIN =============================================================
 
@@ -772,31 +764,38 @@ int main(int argc, char* argv[]) {
   fastjet::ClusterSequence::print_banner(); // get it out of the way
   cout << endl;
 
-  // Open input ntuple root files
-  TChain chain("t3");
-  for (int i=2; i<argc; ++i) {
-    chain.Add(argv[i]);
-    cout << "Input: " << argv[i] << endl;
+  new histogram_handler("Hjets_mtop.bins");
+  
+  { // READING ******************************************************
+    // Open input ntuple root files
+    TChain chain("t3");
+    // auto chain = std::make_unique<TChain>("t3");
+    for (int i=2; i<argc; ++i) {
+      chain.Add(argv[i]);
+      cout << "\033[36mInput\033[0m: " << argv[i] << endl;
+    }
+    cout << endl;
+
+    cout << "Running in " << NPROC << " threads" << endl;
+    new event_reader(&chain);
+
+    // threads ......................................................
+    std::array<std::thread,NPROC> threads;
+    for (unsigned short i=0; i<NPROC; ++i)
+      threads[i] = std::thread{ event_handler(i) };
+    for (auto& thread : threads) thread.join();
+    // ..............................................................
+
+    delete reader;
   }
-
-  event_reader _reader(&chain);
-  histogram_handler _hh("Hjets_mtop.bins");
-
-  // THREADS ********************************************************
-  cout << "Running in " << NPROC << " threads" << endl;
-  cnt.set(_reader._reader.GetEntries(true)); // start timed counter
-
-  std::array<std::thread,NPROC> threads;
-  for (unsigned short i=0; i<NPROC; ++i)
-    threads[i] = std::thread{ event_handler(i) };
-  for (auto& thread : threads) thread.join();
   // ****************************************************************
 
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << endl;
 
-  _hh.write(argv[1]);
+  hh->write(argv[1]);
+  delete hh;
 
   return 0;
 }

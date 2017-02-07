@@ -1,9 +1,10 @@
 STD := -std=c++14
 DF := $(STD) -Isrc
-CF := $(STD) -Wall -O3 -fmax-errors=3 -flto -Isrc
+CF := $(STD) -Wall -Isrc -O3 -fmax-errors=3 -flto
 LF := $(STD) -flto
 
 NPROC := $(shell nproc --all)
+# NPROC := 1
 
 # ROOT_CFLAGS := $(shell root-config --cflags)
 ROOT_CFLAGS := -Wno-deprecated-declarations -pthread -m64 -I$(shell root-config --incdir)

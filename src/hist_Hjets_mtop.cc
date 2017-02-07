@@ -4,6 +4,9 @@
 #include <cstring>
 #include <algorithm>
 #include <memory>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
 #include <boost/optional.hpp>
 
@@ -34,6 +37,10 @@
 
 #include "burst.hh"
 
+#ifndef NPROC
+#define NPROC 1
+#endif
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -43,6 +50,22 @@ using ivanp::reserve;
 
 namespace fj = fastjet;
 using namespace ivanp::math;
+
+class event_reader;
+class histogram_handler;
+
+// Global variables =================================================
+const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
+const double jet_pt_cut = 30., jet_eta_cut = 4.4;
+const unsigned need_njets = 2;
+
+event_reader *ent = nullptr;
+histogram_handler *hh = nullptr;
+
+std::atomic_ullong ncount(0), num_events(0), num_selected(0);
+
+ivanp::timed_counter<Long64_t> cnt;
+// ==================================================================
 
 struct Jet {
   TLorentzVector p;
@@ -75,23 +98,45 @@ isp_t get_isp(Int_t id1, Int_t id2) noexcept {
 }
 
 struct hist_bin {
-  static double weight;
-  double w, w2;
-  size_t n;
-  hist_bin(): w(0.), w2(0.), n(0) { }
-  inline void operator++() noexcept {
-    w += weight;
-    w2 += weight*weight;
-    ++n;
-  }
-  inline hist_bin& operator+=(const hist_bin& b) noexcept {
-    w += b.w;
-    w2 += b.w2;
-    n += b.n;
+  static double weight[NPROC];
+  struct impl {
+    double w = 0, w2 = 0;
+    size_t n = 0;
+    inline impl& operator+=(double weight) noexcept {
+      w += weight;
+      w2 += weight*weight;
+      ++n;
+      return *this;
+    }
+    inline impl& operator+=(const impl& b) noexcept {
+      w += b.w;
+      w2 += b.w2;
+      n += b.n;
+      return *this;
+    }
+  } thread_bins[NPROC];
+
+  inline hist_bin& operator+=(unsigned short thread_id) noexcept {
+    thread_bins[thread_id] += weight[thread_id];
     return *this;
   }
+  inline hist_bin& operator+=(const hist_bin& b) noexcept {
+    for (unsigned i=0; i<NPROC; ++i)
+      thread_bins[i] += b.thread_bins[i];
+    return *this;
+  }
+  inline void merge() noexcept {
+    for (unsigned i=1; i<NPROC; ++i) {
+      thread_bins[0] += thread_bins[i];
+      thread_bins[i] = { }; // zero out
+    }
+  }
+  inline auto& operator[](size_t i) noexcept { return thread_bins[i]; }
+  inline const auto& operator[](size_t i) const noexcept {
+    return thread_bins[i];
+  }
 };
-double hist_bin::weight;
+double hist_bin::weight[NPROC];
 
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
@@ -110,10 +155,11 @@ TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
   h->Sumw2();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
-  for (auto bin=begin; bin!=end; ++bin, ++i) {
-    h->SetBinContent(i,bin->w);
-    sumw2[i] = bin->w2;
-    n_total += bin->n;
+  for (auto it=begin; it!=end; ++it, ++i) {
+    auto& bin = (*it)[0];
+    h->SetBinContent(i,bin.w);
+    sumw2[i] = bin.w2;
+    n_total += bin.n;
   }
   h->SetEntries(n_total);
   return h;
@@ -127,10 +173,11 @@ make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   h->Sumw2();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
-  for (auto bin=s.begin; bin!=s.end; ++bin, ++i) {
-    h->SetBinContent(i,bin->w);
-    sumw2[i] = bin->w2;
-    n_total += bin->n;
+  for (auto it=s.begin; it!=s.end; ++it, ++i) {
+    auto& bin = (*it)[0];
+    h->SetBinContent(i,bin.w);
+    sumw2[i] = bin.w2;
+    n_total += bin.n;
   }
   h->SetEntries(n_total);
   return h;
@@ -146,11 +193,12 @@ make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   // auto *bins = dynamic_cast<TArrayD*>(h)->GetArray();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
-  for (auto bin=s.begin; bin!=s.end; ++bin, ++i) {
-    h->SetBinContent(i,bin->w);
-    // bins[i]  = bin->w;
-    sumw2[i] = bin->w2;
-    n_total += bin->n;
+  for (auto it=s.begin; it!=s.end; ++it, ++i) {
+    auto& bin = (*it)[0];
+    h->SetBinContent(i,bin.w);
+    // bins[i]  = bin.w;
+    sumw2[i] = bin.w2;
+    n_total += bin.n;
   }
   h->SetEntries(n_total);
   return h;
@@ -207,52 +255,22 @@ TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
   return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
 }
 
-int main(int argc, char* argv[])
-{
-  fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
-  const double jet_pt_cut = 30.;
-  const double jet_eta_cut = 4.4;
-  constexpr unsigned need_njets = 2;
+// HISTOGRAM HANDLER ================================================
 
-  // Define histograms ==============================================
-  size_t ncount = 0, num_events = 0, num_selected = 0;
+struct histogram_handler {
+  re_axes ra;
 
-  hist<int> h_Njets({need_njets+2,0,need_njets+2});
+  hist<int> h_Njets{{need_njets+2,0,need_njets+2}};
 
-  re_axes ra("Hjets_mtop.bins");
-#define a_(name) auto a_##name = ra[#name];
-#define h_(name) re_hist<1> h_##name(#name,ra[#name]);
+#define a_(name) re_axis a_##name = ra[#name];
+#define h_(name) re_hist<1> h_##name{#name,ra[#name]};
 
   a_(y) a_(phi)
 
   h_(HT) h_(H_pT) h_(H_y) h_(H_eta) h_(H_phi) h_(H_mass)
 
-  auto h_jet_pT   = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_y    = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_eta  = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_phi  = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_mass = reserve<re_hist<1>>(need_njets+1);
-
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_pT");
-    h_jet_pT.emplace_back(name,ra[name]);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_y");
-    h_jet_y.emplace_back(name,a_y);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_eta");
-    h_jet_eta.emplace_back(name,a_y);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_phi");
-    h_jet_phi.emplace_back(name,a_phi);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_mass");
-    h_jet_mass.emplace_back(name,ra[name]);
-  }
+  std::vector<re_hist<1>>
+    h_jet_pT, h_jet_y, h_jet_eta, h_jet_phi, h_jet_mass;
 
   h_(jjpT_dpT )  h_(jjfb_dpT )
   h_(jjpT_dy  )  h_(jjfb_dy  )
@@ -285,113 +303,249 @@ int main(int argc, char* argv[])
   a_(_x) a_(_HT) a_(_maxdy) a_(_pT) a_(_x2)
 
   re_hist<2>
-    h_xH_HT(a__x, a__HT),
-    h_x1_HT(a__x, a__HT),
-    h_x2_HT(a__x, a__HT),
+    h_xH_HT{a__x, a__HT},
+    h_x1_HT{a__x, a__HT},
+    h_x2_HT{a__x, a__HT},
 
-    h_gg_xH_HT(a__x, a__HT),
-    h_gg_x1_HT(a__x, a__HT),
-    h_gg_x2_HT(a__x, a__HT),
+    h_gg_xH_HT{a__x, a__HT},
+    h_gg_x1_HT{a__x, a__HT},
+    h_gg_x2_HT{a__x, a__HT},
 
-    h_gq_xH_HT(a__x, a__HT),
-    h_gq_x1_HT(a__x, a__HT),
-    h_gq_x2_HT(a__x, a__HT),
+    h_gq_xH_HT{a__x, a__HT},
+    h_gq_x1_HT{a__x, a__HT},
+    h_gq_x2_HT{a__x, a__HT},
 
-    h_qq_xH_HT(a__x, a__HT),
-    h_qq_x1_HT(a__x, a__HT),
-    h_qq_x2_HT(a__x, a__HT);
+    h_qq_xH_HT{a__x, a__HT},
+    h_qq_x1_HT{a__x, a__HT},
+    h_qq_x2_HT{a__x, a__HT};
 
   re_hist<3>
-    h_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_xH_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_x1_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_x2_HT_maxdy{a__x, a__HT, a__maxdy},
 
-    h_gg_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gg_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gg_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gg_xH_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_gg_x1_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_gg_x2_HT_maxdy{a__x, a__HT, a__maxdy},
 
-    h_gq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gq_x2_HT_maxdy(a__x, a__HT, a__maxdy),
+    h_gq_xH_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_gq_x1_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_gq_x2_HT_maxdy{a__x, a__HT, a__maxdy},
 
-    h_qq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_qq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_qq_x2_HT_maxdy(a__x, a__HT, a__maxdy);
+    h_qq_xH_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_qq_x1_HT_maxdy{a__x, a__HT, a__maxdy},
+    h_qq_x2_HT_maxdy{a__x, a__HT, a__maxdy};
 
   // p1's pT in bins of p2's x
   std::array<std::array< re_hist<2>, 3>,3> h_p1pT_p2x;
-  for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
 
   // xi vs xj in bins of HT
   a_(_x3)
   re_hist<3>
-    h_xH_x1_HT(a__x3,a__x3,a__HT),
-    h_xH_x2_HT(a__x3,a__x3,a__HT),
-    h_x1_x2_HT(a__x3,a__x3,a__HT);
+    h_xH_x1_HT{a__x3,a__x3,a__HT},
+    h_xH_x2_HT{a__x3,a__x3,a__HT},
+    h_x1_x2_HT{a__x3,a__x3,a__HT};
 
   // maxdy vs maxdphi in bins of HT
   a_(_maxdy2) a_(_maxdphi2)
   re_hist<3>
-    h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
+    h_maxdy_maxdphi_HT{a__maxdy2,a__maxdphi2,a__HT};
 
-  // ================================================================
+  // Constructor ----------------------------------------------------
+  histogram_handler(const std::string& bins_file): ra(bins_file) {
+    h_jet_pT  .reserve(need_njets+1);
+    h_jet_y   .reserve(need_njets+1);
+    h_jet_eta .reserve(need_njets+1);
+    h_jet_phi .reserve(need_njets+1);
+    h_jet_mass.reserve(need_njets+1);
 
-  // Open input ntuple root file
-  TChain chain("t3");
-  for (int i=2; i<argc; ++i) { chain.Add(argv[i]); }
+    // populate vectors of histograms for default jet variables
+    for (unsigned i=0; i<need_njets+1; ++i) {
+      auto name = cat("jet",i+1,"_pT");
+      h_jet_pT.emplace_back(name,ra[name]);
+    }
+    for (unsigned i=0; i<need_njets+1; ++i) {
+      auto name = cat("jet",i+1,"_y");
+      h_jet_y.emplace_back(name,a_y);
+    }
+    for (unsigned i=0; i<need_njets+1; ++i) {
+      auto name = cat("jet",i+1,"_eta");
+      h_jet_eta.emplace_back(name,a_y);
+    }
+    for (unsigned i=0; i<need_njets+1; ++i) {
+      auto name = cat("jet",i+1,"_phi");
+      h_jet_phi.emplace_back(name,a_phi);
+    }
+    for (unsigned i=0; i<need_njets+1; ++i) {
+      auto name = cat("jet",i+1,"_mass");
+      h_jet_mass.emplace_back(name,ra[name]);
+    }
 
-  // Set up branches for reading
-  TTreeReader reader(&chain);
+    // p1's pT in bins of p2's x
+    for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
 
-  TTreeReaderValue<Int_t> _id(reader,"id");
-  TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
-  TTreeReaderArray<Int_t> _kf(reader,"kf");
-  TTreeReaderValue<Double_t> _weight(reader,"weight");
-
-  float_or_double_array_reader _px(reader,"px");
-  float_or_double_array_reader _py(reader,"py");
-  float_or_double_array_reader _pz(reader,"pz");
-  float_or_double_array_reader _E (reader,"E" );
-
-  boost::optional<TTreeReaderValue<Int_t>> _ncount;
-  // boost::optional<TTreeReaderValue<Char_t>> _part;
-  for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
-    if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
-    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
+    hh = this;
   }
-  TTreeReaderValue<Int_t> _id1(reader,"id1");
-  TTreeReaderValue<Int_t> _id2(reader,"id2");
 
-  std::vector<fj::PseudoJet> particles;
-  Int_t prev_id = -1, curr_id;
+  void write(const char* root_file) {
+    // Open output root file for histograms
+    auto fout = std::make_unique<TFile>(root_file,"recreate");
+    if (fout->IsZombie()) throw ivanp::exception(
+      "cannot open output root file ", root_file);
+    cout << "Output file: " << fout->GetName() << endl;
 
-  // LOOP ***********************************************************
-  using tc = ivanp::timed_counter<Long64_t>;
-  for (tc ent(reader.GetEntries(true)); reader.Next() /* && ent < 1 */; ++ent) {
-    hist_bin::weight = *_weight; // Read weight
+    fout->mkdir("weight2_JetAntiKt4")->cd();
+
+    // write root historgrams
+    root_hist(h_Njets,"jets_N_excl");
+    h_Njets.integrate_left();
+    root_hist(h_Njets,"jets_N_incl");
+
+    for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
+
+    make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
+    make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
+    make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
+
+    make_root_hists<2>(h_maxdy_maxdphi_HT,{"maxdy_maxdphi","HT"});
+
+    make_root_hists<1>(h_p1pT_p2x[0][0],{   "H_pT","xH"});
+    make_root_hists<1>(h_p1pT_p2x[0][1],{   "H_pT","x1"});
+    make_root_hists<1>(h_p1pT_p2x[0][2],{   "H_pT","x2"});
+    make_root_hists<1>(h_p1pT_p2x[1][0],{"jet1_pT","xH"});
+    make_root_hists<1>(h_p1pT_p2x[1][1],{"jet1_pT","x1"});
+    make_root_hists<1>(h_p1pT_p2x[1][2],{"jet1_pT","x2"});
+    make_root_hists<1>(h_p1pT_p2x[2][0],{"jet2_pT","xH"});
+    make_root_hists<1>(h_p1pT_p2x[2][1],{"jet2_pT","x1"});
+    make_root_hists<1>(h_p1pT_p2x[2][2],{"jet2_pT","x2"});
+
+    make_root_hists<1>(h_xH_HT,{"xH","HT"});
+    make_root_hists<1>(h_x1_HT,{"x1","HT"});
+    make_root_hists<1>(h_x2_HT,{"x2","HT"});
+
+    make_root_hists<1>(h_xH_HT_maxdy,{"xH","HT","maxdy"});
+    make_root_hists<1>(h_x1_HT_maxdy,{"x1","HT","maxdy"});
+    make_root_hists<1>(h_x2_HT_maxdy,{"x2","HT","maxdy"});
+
+    make_root_hists<1>(h_gg_xH_HT,{"gg_xH","HT"});
+    make_root_hists<1>(h_gg_x1_HT,{"gg_x1","HT"});
+    make_root_hists<1>(h_gg_x2_HT,{"gg_x2","HT"});
+
+    make_root_hists<1>(h_gq_xH_HT,{"gq_xH","HT"});
+    make_root_hists<1>(h_gq_x1_HT,{"gq_x1","HT"});
+    make_root_hists<1>(h_gq_x2_HT,{"gq_x2","HT"});
+
+    make_root_hists<1>(h_qq_xH_HT,{"qq_xH","HT"});
+    make_root_hists<1>(h_qq_x1_HT,{"qq_x1","HT"});
+    make_root_hists<1>(h_qq_x2_HT,{"qq_x2","HT"});
+
+    make_root_hists<1>(h_gg_xH_HT_maxdy,{"gg_xH","HT","maxdy"});
+    make_root_hists<1>(h_gg_x1_HT_maxdy,{"gg_x1","HT","maxdy"});
+    make_root_hists<1>(h_gg_x2_HT_maxdy,{"gg_x2","HT","maxdy"});
+
+    make_root_hists<1>(h_gq_xH_HT_maxdy,{"gq_xH","HT","maxdy"});
+    make_root_hists<1>(h_gq_x1_HT_maxdy,{"gq_x1","HT","maxdy"});
+    make_root_hists<1>(h_gq_x2_HT_maxdy,{"gq_x2","HT","maxdy"});
+
+    make_root_hists<1>(h_qq_xH_HT_maxdy,{"qq_xH","HT","maxdy"});
+    make_root_hists<1>(h_qq_x1_HT_maxdy,{"qq_x1","HT","maxdy"});
+    make_root_hists<1>(h_qq_x2_HT_maxdy,{"qq_x2","HT","maxdy"});
+
+    fout->cd();
+    (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
+    fout->Write();
+  }
+};
+
+// EVENT READER =====================================================
+
+struct event_reader {
+  // Set up branches for reading
+  TTreeReader reader;
+
+  TTreeReaderValue<Int_t> id, nparticle, id1, id2;
+  TTreeReaderArray<Int_t> kf;
+  TTreeReaderValue<Double_t> weight;
+  float_or_double_array_reader px, py, pz, E;
+  boost::optional<TTreeReaderValue<Int_t>> ncount;
+  // boost::optional<TTreeReaderValue<Char_t>> part;
+
+  event_reader(TTree* tree)
+  : reader(tree),
+    id(reader,"id"), nparticle(reader,"nparticle"),
+    id1(reader,"id1"), id2(reader,"id2"), kf(reader,"kf"),
+    weight(reader,"weight"),
+    px(reader,"px"), py(reader,"py"), pz(reader,"pz"), E(reader,"E" )
+  {
+    for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
+      if (!strcmp(bo->GetName(),"ncount")) ncount.emplace(reader,"ncount");
+      // else if (!strcmp(bo->GetName(),"part")) part.emplace(reader,"part");
+    }
+    ent = this;
+  }
+
+  inline bool next() { return reader.Next(); }
+};
+
+// EVENT HANDLER ====================================================
+
+class event_handler {
+  unsigned short t;
+  static std::mutex mut_next, mut_cnt;
+
+  // class recur_at_exit {
+  //   event_handler *p;
+  //   typedef void(event_handler::*fcn_type)(void);
+  //   fcn_type f;
+  // public:
+  //   recur_at_exit(event_handler* p, fcn_type f): p(p), f(f) { }
+  //   ~recur_at_exit() { (p->*f)(); } // call the function on destruction
+  // };
+  struct recursion {
+    event_handler *p;
+    ~recursion() { (*p)(); }
+  };
+
+public:
+  event_handler(unsigned thread_id): t(thread_id) { }
+
+  void operator()() {
+    mut_next.lock();
+    const bool good_next = ent->next();
+    mut_next.unlock();
+    if (!good_next) return;
+    recursion recur{this};
+
+    // **************************************************************
 
     // Keep track of multi-entry events -----------------------------
+    // FIXME
+    /*
+    Int_t prev_id = -1, curr_id; // was before loop
     curr_id = *_id;
     if (prev_id!=curr_id) {
       prev_id = curr_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
+    */
+    ncount += ( ent->ncount ? **ent->ncount : 1);
+    ++num_events;
     // --------------------------------------------------------------
 
-    particles.clear();
-    particles.reserve(*_nparticle);
+    const auto nparticle = *ent->nparticle;
+    auto particles = reserve<fj::PseudoJet>(nparticle);
     boost::optional<TLorentzVector> higgs;
 
     // Read particles -----------------------------------------------
-    for (size_t i=0, n=_kf.GetSize(); i<n; ++i) {
-      if (_kf[i] == 25) {
-        higgs.emplace(_px[i],_py[i],_pz[i],_E[i]);
+    for (int i=0; i<nparticle; ++i) {
+      if (ent->kf[i] == 25) {
+        higgs.emplace(ent->px[i],ent->py[i],ent->pz[i],ent->E[i]);
       } else {
-        particles.emplace_back(_px[i],_py[i],_pz[i],_E[i]);
+        particles.emplace_back(ent->px[i],ent->py[i],ent->pz[i],ent->E[i]);
       }
     }
-    if (!higgs) cerr << "\033[31mNo Higgs in entry " << ent <<"\033[0m"<< endl;
+    if (!higgs) throw ivanp::exception("no Higgs in entry ",cnt);
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------
@@ -411,12 +565,14 @@ int main(int argc, char* argv[])
     const unsigned njets = fj_jets.size();
     // --------------------------------------------------------------
 
+    hist_bin::weight[t] = *ent->weight; // Read weight
+
     // Fill Njets histograms before cuts
-    h_Njets.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
+    hh->h_Njets.fill_bin(njets+1, t); // njets+1 because njets==0 is bin 1
     // --------------------------------------------------------------
 
     // Apply event cuts ---------------------------------------------
-    if (njets < need_njets) continue; // at least needed number of jets
+    if (njets < need_njets) return; // at least needed number of jets
     // --------------------------------------------------------------
 
     // Define variables ---------------------------------------------
@@ -436,25 +592,25 @@ int main(int argc, char* argv[])
     ++num_selected;
 
     // Fill histograms ----------------------------------------------
-    h_HT(HT);
+    hh->h_HT(HT, t);
 
-    h_H_pT(H_pT);
-    h_H_y(H_y);
-    h_H_eta(higgs->Eta());
-    h_H_phi(H_phi);
-    h_H_mass(higgs->M());
+    hh->h_H_pT(H_pT, t);
+    hh->h_H_y(H_y, t);
+    hh->h_H_eta(higgs->Eta(), t);
+    hh->h_H_phi(H_phi, t);
+    hh->h_H_mass(higgs->M(), t);
 
-    h_hgam_pT_yy(H_pT);
-    h_hgam_yAbs_yy(std::abs(H_y));
-    h_hgam_HT(HT);
+    hh->h_hgam_pT_yy(H_pT, t);
+    hh->h_hgam_yAbs_yy(std::abs(H_y), t);
+    hh->h_hgam_HT(HT, t);
 
     // jet histograms
     for (unsigned i=0, n=std::min(njets,need_njets+1); i<n; ++i) {
-      h_jet_pT  [i](jets[i].pT  );
-      h_jet_y   [i](jets[i].y   );
-      h_jet_eta [i](jets[i].eta );
-      h_jet_phi [i](jets[i].phi );
-      h_jet_mass[i](jets[i].mass);
+      hh->h_jet_pT  [i](jets[i].pT  , t);
+      hh->h_jet_y   [i](jets[i].y   , t);
+      hh->h_jet_eta [i](jets[i].eta , t);
+      hh->h_jet_phi [i](jets[i].phi , t);
+      hh->h_jet_mass[i](jets[i].mass, t);
     }
 
     // find maximum rapidity separation in the event
@@ -475,76 +631,76 @@ int main(int argc, char* argv[])
       larger(max_dphi,dphi(jets[i].phi,H_phi));
     }
 
-    if (njets<1) continue; // 111111111111111111111111111111111111111
+    if (njets<1) return; // 11111111111111111111111111111111111111111
 
-    h_hgam_pT_j1(jets[0].pT);
-    h_hgam_yAbs_j1(std::abs(jets[0].y));
+    hh->h_hgam_pT_j1(jets[0].pT, t);
+    hh->h_hgam_yAbs_j1(std::abs(jets[0].y), t);
 
-    if (njets<2) continue; // 222222222222222222222222222222222222222
+    if (njets<2) return; // 22222222222222222222222222222222222222222
 
     // HT fraction x in bins on HT and max rapidity separation
     const double xH = H_pT/HT, x1 = jets[0].pT/HT, x2 = jets[1].pT/HT;
 
-    const auto xH_HT_bin = h_xH_HT(xH, HT);
-    const auto x1_HT_bin = h_x1_HT(x1, HT);
-    const auto x2_HT_bin = h_x2_HT(x2, HT);
+    const auto xH_HT_bin = hh->h_xH_HT(xH, HT, t);
+    const auto x1_HT_bin = hh->h_x1_HT(x1, HT, t);
+    const auto x2_HT_bin = hh->h_x2_HT(x2, HT, t);
 
-    const auto xH_HT_maxdy_bin = h_xH_HT_maxdy(xH, HT, max_dy);
-    const auto x1_HT_maxdy_bin = h_x1_HT_maxdy(x1, HT, max_dy);
-    const auto x2_HT_maxdy_bin = h_x2_HT_maxdy(x2, HT, max_dy);
+    const auto xH_HT_maxdy_bin = hh->h_xH_HT_maxdy(xH, HT, max_dy, t);
+    const auto x1_HT_maxdy_bin = hh->h_x1_HT_maxdy(x1, HT, max_dy, t);
+    const auto x2_HT_maxdy_bin = hh->h_x2_HT_maxdy(x2, HT, max_dy, t);
 
     // p1's pT in bins of p2's x
-    h_p1pT_p2x[0][0](H_pT, xH);
-    h_p1pT_p2x[1][0](jets[0].pT, xH);
-    h_p1pT_p2x[2][0](jets[1].pT, xH);
-    h_p1pT_p2x[0][1](H_pT, x1);
-    h_p1pT_p2x[1][1](jets[0].pT, x1);
-    h_p1pT_p2x[2][1](jets[1].pT, x1);
-    h_p1pT_p2x[0][2](H_pT, x2);
-    h_p1pT_p2x[1][2](jets[0].pT, x2);
-    h_p1pT_p2x[2][2](jets[1].pT, x2);
+    hh->h_p1pT_p2x[0][0](H_pT, xH, t);
+    hh->h_p1pT_p2x[1][0](jets[0].pT, xH, t);
+    hh->h_p1pT_p2x[2][0](jets[1].pT, xH, t);
+    hh->h_p1pT_p2x[0][1](H_pT, x1, t);
+    hh->h_p1pT_p2x[1][1](jets[0].pT, x1, t);
+    hh->h_p1pT_p2x[2][1](jets[1].pT, x1, t);
+    hh->h_p1pT_p2x[0][2](H_pT, x2, t);
+    hh->h_p1pT_p2x[1][2](jets[0].pT, x2, t);
+    hh->h_p1pT_p2x[2][2](jets[1].pT, x2, t);
 
-    h_xH_x1_HT(xH,x1,HT);
-    h_xH_x2_HT(xH,x2,HT);
-    h_x1_x2_HT(x1,x2,HT);
+    hh->h_xH_x1_HT(xH,x1,HT, t);
+    hh->h_xH_x2_HT(xH,x2,HT, t);
+    hh->h_x1_x2_HT(x1,x2,HT, t);
 
-    h_maxdy_maxdphi_HT(max_dy,max_dphi,HT);
+    hh->h_maxdy_maxdphi_HT(max_dy,max_dphi,HT, t);
 
-    const auto isp = get_isp(*_id1, *_id2);
+    const auto isp = get_isp(*ent->id1, *ent->id2);
     if (isp == gg) {
-      h_gg_xH_HT.fill_bin(xH_HT_bin);
-      h_gg_x1_HT.fill_bin(x1_HT_bin);
-      h_gg_x2_HT.fill_bin(x2_HT_bin);
+      hh->h_gg_xH_HT.fill_bin(xH_HT_bin, t);
+      hh->h_gg_x1_HT.fill_bin(x1_HT_bin, t);
+      hh->h_gg_x2_HT.fill_bin(x2_HT_bin, t);
 
-      h_gg_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_gg_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_gg_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      hh->h_gg_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin, t);
+      hh->h_gg_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin, t);
+      hh->h_gg_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin, t);
     } else if (isp == gq) {
-      h_gq_xH_HT.fill_bin(xH_HT_bin);
-      h_gq_x1_HT.fill_bin(x1_HT_bin);
-      h_gq_x2_HT.fill_bin(x2_HT_bin);
+      hh->h_gq_xH_HT.fill_bin(xH_HT_bin, t);
+      hh->h_gq_x1_HT.fill_bin(x1_HT_bin, t);
+      hh->h_gq_x2_HT.fill_bin(x2_HT_bin, t);
 
-      h_gq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_gq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_gq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      hh->h_gq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin, t);
+      hh->h_gq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin, t);
+      hh->h_gq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin, t);
     } else {
-      h_qq_xH_HT.fill_bin(xH_HT_bin);
-      h_qq_x1_HT.fill_bin(x1_HT_bin);
-      h_qq_x2_HT.fill_bin(x2_HT_bin);
+      hh->h_qq_xH_HT.fill_bin(xH_HT_bin, t);
+      hh->h_qq_x1_HT.fill_bin(x1_HT_bin, t);
+      hh->h_qq_x2_HT.fill_bin(x2_HT_bin, t);
 
-      h_qq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_qq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_qq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      hh->h_qq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin, t);
+      hh->h_qq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin, t);
+      hh->h_qq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin, t);
     }
 
     // Jet pair with highest pT .....................................
     const dijet jjpT(jets[0],jets[1]);
 
-    h_jjpT_dpT (jjpT.dpT );
-    h_jjpT_dy  (jjpT.dy  );
-    h_jjpT_deta(jjpT.deta);
-    h_jjpT_dphi(jjpT.dphi);
-    h_jjpT_mass(jjpT.mass);
+    hh->h_jjpT_dpT (jjpT.dpT , t);
+    hh->h_jjpT_dy  (jjpT.dy  , t);
+    hh->h_jjpT_deta(jjpT.deta, t);
+    hh->h_jjpT_dphi(jjpT.dphi, t);
+    hh->h_jjpT_mass(jjpT.mass, t);
     // ..............................................................
 
     // Two most forward-backward jets ...............................
@@ -560,97 +716,61 @@ int main(int argc, char* argv[])
       ? jjpT : dijet(jets[jb],jets[jf]) // possibly reuse jjpT
     );
 
-    h_jjfb_dpT (jjfb.dpT );
-    h_jjfb_dy  (jjfb.dy  );
-    h_jjfb_deta(jjfb.deta);
-    h_jjfb_dphi(jjfb.dphi);
-    h_jjfb_mass(jjfb.mass);
+    hh->h_jjfb_dpT (jjfb.dpT , t);
+    hh->h_jjfb_dy  (jjfb.dy  , t);
+    hh->h_jjfb_deta(jjfb.deta, t);
+    hh->h_jjfb_dphi(jjfb.dphi, t);
+    hh->h_jjfb_mass(jjfb.mass, t);
     // ..............................................................
 
-    h_hgam_pT_j2(jets[1].pT);
-    h_hgam_yAbs_j2(std::abs(jets[1].y));
+    hh->h_hgam_pT_j2(jets[1].pT, t);
+    hh->h_hgam_yAbs_j2(std::abs(jets[1].y), t);
 
-    h_hgam_Dphi_j_j(jjpT.dphi);
-    h_hgam_Dy_j_j(jjpT.dy);
-    h_hgam_m_jj(jjpT.mass);
+    hh->h_hgam_Dphi_j_j(jjpT.dphi, t);
+    hh->h_hgam_Dy_j_j(jjpT.dy, t);
+    hh->h_hgam_m_jj(jjpT.mass, t);
 
     const auto Hjj = *higgs + jjpT.p;
 
-    h_hgam_pT_yyjj(Hjj.Pt());
-    h_hgam_Dphi_yy_jj(dphi(H_phi,jjpT.p.Phi()));
+    hh->h_hgam_pT_yyjj(Hjj.Pt(), t);
+    hh->h_hgam_Dphi_yy_jj(dphi(H_phi,jjpT.p.Phi()), t);
 
-    // --------------------------------------------------------------
-  } // END EVENT LOOP
+    // **************************************************************
+
+    mut_cnt.lock();
+    ++cnt;
+    mut_cnt.unlock();
+  }
+};
+std::mutex event_handler::mut_next, event_handler::mut_cnt;
+
+// MAIN =============================================================
+
+int main(int argc, char* argv[]) {
+  // Open input ntuple root files
+  TChain chain("t3");
+  for (int i=2; i<argc; ++i) {
+    chain.Add(argv[i]);
+    cout << "Input: " << argv[i] << endl;
+  }
+
+  event_reader _ent(&chain);
+  histogram_handler _hh("Hjets_mtop.bins");
+
+  // THREADS ********************************************************
+  cout << "Running in " << NPROC << " threads" << endl;
+  cnt.set(_ent.reader.GetEntries(true)); // start timed counter
+
+  std::array<std::thread,NPROC> threads;
+  for (unsigned short i=0; i<NPROC; ++i)
+    (threads[i] = std::thread{ event_handler(i) }).join();
   // ****************************************************************
 
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << endl;
 
-  // Open output root file for histograms
-  auto fout = std::make_unique<TFile>(argv[1],"recreate");
-  if (fout->IsZombie()) return 1;
-
-  fout->mkdir("weight2_JetAntiKt4")->cd();
-
-  // write root historgrams
-  root_hist(h_Njets,"jets_N_excl");
-  h_Njets.integrate_left();
-  root_hist(h_Njets,"jets_N_incl");
-
-  for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
-
-  make_root_hists<2>(h_xH_x1_HT,{"xH_x1","HT"});
-  make_root_hists<2>(h_xH_x2_HT,{"xH_x2","HT"});
-  make_root_hists<2>(h_x1_x2_HT,{"x1_x2","HT"});
-
-  make_root_hists<2>(h_maxdy_maxdphi_HT,{"maxdy_maxdphi","HT"});
-
-  make_root_hists<1>(h_p1pT_p2x[0][0],{   "H_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[0][1],{   "H_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[0][2],{   "H_pT","x2"});
-  make_root_hists<1>(h_p1pT_p2x[1][0],{"jet1_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[1][1],{"jet1_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[1][2],{"jet1_pT","x2"});
-  make_root_hists<1>(h_p1pT_p2x[2][0],{"jet2_pT","xH"});
-  make_root_hists<1>(h_p1pT_p2x[2][1],{"jet2_pT","x1"});
-  make_root_hists<1>(h_p1pT_p2x[2][2],{"jet2_pT","x2"});
-
-  make_root_hists<1>(h_xH_HT,{"xH","HT"});
-  make_root_hists<1>(h_x1_HT,{"x1","HT"});
-  make_root_hists<1>(h_x2_HT,{"x2","HT"});
-
-  make_root_hists<1>(h_xH_HT_maxdy,{"xH","HT","maxdy"});
-  make_root_hists<1>(h_x1_HT_maxdy,{"x1","HT","maxdy"});
-  make_root_hists<1>(h_x2_HT_maxdy,{"x2","HT","maxdy"});
-
-  make_root_hists<1>(h_gg_xH_HT,{"gg_xH","HT"});
-  make_root_hists<1>(h_gg_x1_HT,{"gg_x1","HT"});
-  make_root_hists<1>(h_gg_x2_HT,{"gg_x2","HT"});
-
-  make_root_hists<1>(h_gq_xH_HT,{"gq_xH","HT"});
-  make_root_hists<1>(h_gq_x1_HT,{"gq_x1","HT"});
-  make_root_hists<1>(h_gq_x2_HT,{"gq_x2","HT"});
-
-  make_root_hists<1>(h_qq_xH_HT,{"qq_xH","HT"});
-  make_root_hists<1>(h_qq_x1_HT,{"qq_x1","HT"});
-  make_root_hists<1>(h_qq_x2_HT,{"qq_x2","HT"});
-
-  make_root_hists<1>(h_gg_xH_HT_maxdy,{"gg_xH","HT","maxdy"});
-  make_root_hists<1>(h_gg_x1_HT_maxdy,{"gg_x1","HT","maxdy"});
-  make_root_hists<1>(h_gg_x2_HT_maxdy,{"gg_x2","HT","maxdy"});
-
-  make_root_hists<1>(h_gq_xH_HT_maxdy,{"gq_xH","HT","maxdy"});
-  make_root_hists<1>(h_gq_x1_HT_maxdy,{"gq_x1","HT","maxdy"});
-  make_root_hists<1>(h_gq_x2_HT_maxdy,{"gq_x2","HT","maxdy"});
-
-  make_root_hists<1>(h_qq_xH_HT_maxdy,{"qq_xH","HT","maxdy"});
-  make_root_hists<1>(h_qq_x1_HT_maxdy,{"qq_x1","HT","maxdy"});
-  make_root_hists<1>(h_qq_x2_HT_maxdy,{"qq_x2","HT","maxdy"});
-
-  fout->cd();
-  (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
-  fout->Write();
+  _hh.write(argv[1]);
 
   return 0;
 }

@@ -3,6 +3,8 @@ DF := $(STD) -Isrc
 CF := $(STD) -Wall -O3 -fmax-errors=3 -flto -Isrc
 LF := $(STD) -flto
 
+NPROC := $(shell nproc --all)
+
 # ROOT_CFLAGS := $(shell root-config --cflags)
 ROOT_CFLAGS := -Wno-deprecated-declarations -pthread -m64 -I$(shell root-config --incdir)
 ROOT_LIBS   := $(shell root-config --libs)
@@ -11,7 +13,7 @@ FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
 FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
-C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS) -DNPROC=$(NPROC)
 L_hist_Hjets_mtop := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
 SRC := src

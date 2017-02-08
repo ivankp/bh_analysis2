@@ -97,11 +97,13 @@ private:
   guard_over(size_type bin) const noexcept { return false; }
   template <size_t I, typename A = axis_spec<I>>
   constexpr std::enable_if_t<!A::over::value && !A::excep::value,bool>
-  guard_over(size_type bin) const noexcept { return (bin>axis<I>().nbins()); }
+  guard_over(size_type bin) const noexcept {
+    return (bin > axis<I>().nbins());
+  }
   template <size_t I, typename A = axis_spec<I>>
   constexpr std::enable_if_t<!A::over::value && A::excep::value,bool>
   guard_over(size_type bin) const {
-    if (bin>axis<I>().nbins()) throw std::out_of_range("axis overflow");
+    if (bin > axis<I>().nbins()) throw std::out_of_range("axis overflow");
     return false;
   }
 
@@ -213,12 +215,15 @@ public:
   constexpr size_type index(replace_t<size_type,Ax>... ii) const noexcept {
     return index_impl(ii...);
   }
-  constexpr size_type index(index_array_cref bin) const noexcept {
-    return index_impl(bin,std::make_index_sequence<naxes>());
+  constexpr size_type index(index_array_cref ii) const noexcept {
+    return index_impl(ii,std::make_index_sequence<naxes>());
   }
 
   inline const value_type& bin(replace_t<size_type,Ax>... ii) const {
     return _bins[index_impl(ii...)];
+  }
+  inline const value_type& bin(index_array_cref ii) const {
+    return _bins[index_impl(ii,std::make_index_sequence<naxes>())];
   }
 
   // find bin -------------------------------------------------------

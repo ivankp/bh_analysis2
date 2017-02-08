@@ -1,5 +1,5 @@
-#ifndef IVANP_BINNER_BURST_HH
-#define IVANP_BINNER_BURST_HH
+#ifndef IVANP_BINNER_SLICE_HH
+#define IVANP_BINNER_SLICE_HH
 
 #include <tuple>
 #include <array>
@@ -18,14 +18,24 @@ all_nbins(const std::tuple<A...>& axes, std::index_sequence<I...>) {
   return {(std::get<I>(axes).nbins())...};
 }
 
+template <typename A>
+auto edge_vector(const A& axis) {
+  const auto n = axis.nedges();
+  using size_type = typename A::size_type;
+  std::vector<typename A::edge_type> range;
+  range.reserve(n);
+  for (size_type i=0; i<n; ++i) range.emplace_back(axis.edge(i));
+  return std::move(range);
+}
+
 template <typename... A, size_t... I>
 inline auto make_ranges(
   const std::tuple<A...>& axes,
   std::index_sequence<I...>
-) -> std::tuple<std::array<
-      typename std::tuple_element_t<I,std::tuple<A...>>::edge_type,2>...>
+) -> std::tuple< std::vector<
+      typename std::tuple_element_t<I,std::tuple<A...>>::edge_type>...>
 {
-  return { { std::get<I>(axes).min(), std::get<I>(axes).max() }... };
+  return { std::move(edge_vector(std::get<I>(axes)))... };
 }
 
 template <typename... A, size_t... I>
@@ -83,44 +93,43 @@ prod(const std::array<T,N>& a, F f) {
 template <typename, typename, typename> struct binner_slice { };
 template <typename It, typename... Ranges, typename... Slices>
 struct binner_slice<It,std::tuple<Ranges...>,std::tuple<Slices...>> {
-  using ranges_t = std::tuple<std::array<Ranges,2>...>;
+  using ranges_t = std::tuple<Ranges...>;
   using slices_t = std::tuple<std::array<Slices,2>...>;
   static constexpr size_t ranges_size = sizeof...(Ranges);
   static constexpr size_t slices_size = sizeof...(Slices);
   It begin, end;
-  std::array<axis_size_type,ranges_size> nbins;
   ranges_t ranges;
   slices_t slices;
 };
 
-template <typename, typename, typename, typename> struct make_binner_slice { };
+template <typename, typename, typename, typename> struct binner_slice_type { };
 template <typename It, typename... A, size_t... R, size_t... S>
-struct make_binner_slice<It,std::tuple<A...>,
+struct binner_slice_type<It,std::tuple<A...>,
   std::index_sequence<R...>, std::index_sequence<S...>
 > {
   using tuple_type = std::tuple<A...>;
   using type = binner_slice<It,
-    std::tuple<typename std::tuple_element_t<R,tuple_type>::edge_type...>,
+    std::tuple< std::vector<
+               typename std::tuple_element_t<R,tuple_type>::edge_type>...>,
     std::tuple<typename std::tuple_element_t<S,tuple_type>::edge_type...>
   >;
 };
 
-// template <typename... T> struct test_type;
-
 template <size_t D, typename... A, typename It>
-auto burst(const std::tuple<A...>& axes, It first, It last) {
-  static_assert(0<D && D<sizeof...(A),"");
-  static_assert(D==1||D==2,"for now, burst only works for D==1,2");
+auto slice(const std::tuple<A...>& axes, It first, It last) {
+  static_assert(0!=D && D<sizeof...(A),"");
+  static_assert((sizeof...(A)-D)==1||(sizeof...(A)-D)==2,
+    "for now, burst only works for (naxes-D)==1,2");
   using seq  = std::make_index_sequence<sizeof...(A)>;
   using seq1 = std::make_index_sequence<D>;
   using seq2 = index_sequence_tail<D,sizeof...(A)>;
-  using slice_t = typename make_binner_slice<It,
+  using slice_t = typename binner_slice_type<It,
     std::tuple<A...>, seq1, seq2 >::type;
 
   const auto ranges = detail::make_ranges(axes,seq1{});
 
   const auto nbins  = detail::all_nbins(axes,seq{});
-  const auto nbins1 = detail::all_nbins(axes,seq1{});
+  // const auto nbins1 = detail::all_nbins(axes,seq1{});
   const auto nbins2 = detail::all_nbins(axes,seq2{});
   std::remove_const_t<decltype(nbins2)> cnt{};
 
@@ -136,7 +145,7 @@ auto burst(const std::tuple<A...>& axes, It first, It last) {
         check = detail::advance_cnt(nbins2,cnt)
   ) {
     if (check.first) it += len1*2;
-    slices.push_back({ it, it+len1, nbins1,
+    slices.push_back({ it, it+len1,
       ranges, detail::make_slices(axes,cnt,seq2{}) });
     it += len1;
   }

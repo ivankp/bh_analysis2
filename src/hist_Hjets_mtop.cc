@@ -35,10 +35,14 @@
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
 
-#include "burst.hh"
+#include "slice.hh"
 
 #ifndef NPROC
 #define NPROC 1
+#endif
+
+#ifndef MAXNP
+#define MAXNP 8
 #endif
 
 using std::cout;
@@ -166,8 +170,8 @@ template <size_t D, typename... T>
 std::enable_if_t<D==1,TH1D*>
 make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   static_assert(std::decay_t<decltype(s)>::ranges_size==D,"");
-  TH1D* h = new TH1D(name.c_str(),"",
-    s.nbins[0], std::get<0>(s.ranges)[0], std::get<0>(s.ranges)[1]);
+  const auto& r1 = std::get<0>(s.ranges);
+  TH1D* h = new TH1D(name.c_str(),"", r1.size()-1, r1.data());
   h->Sumw2();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
@@ -184,9 +188,11 @@ template <size_t D, typename... T>
 std::enable_if_t<D==2,TH2D*>
 make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   static_assert(std::decay_t<decltype(s)>::ranges_size==D,"");
+  const auto& r1 = std::get<0>(s.ranges);
+  const auto& r2 = std::get<1>(s.ranges);
   TH2D* h = new TH2D(name.c_str(),"",
-    s.nbins[0], std::get<0>(s.ranges)[0], std::get<0>(s.ranges)[1],
-    s.nbins[1], std::get<1>(s.ranges)[0], std::get<1>(s.ranges)[1]);
+    r1.size()-1, r1.data(),
+    r2.size()-1, r2.data());
   h->Sumw2();
   // auto *bins = dynamic_cast<TArrayD*>(h)->GetArray();
   TArrayD& sumw2 = *h->GetSumw2();
@@ -227,7 +233,7 @@ void make_root_hists(
 ) {
   if (names.size() == sizeof...(A)-D) throw ivanp::exception(
     *names.begin(),": number of names doesn't match dimensions");
-  const auto slices = ivanp::burst<D>(
+  const auto slices = ivanp::slice<D>(
     h.axes(), h.bins().begin(), h.bins().begin() );
   for (const auto& s : slices) {
     auto it = names.begin();
@@ -465,7 +471,7 @@ struct entry {
   struct {
     Double_t px, py, pz, E;
     Int_t kf;
-  } p[8];
+  } p[MAXNP];
 };
 
 struct event_reader {

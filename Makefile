@@ -4,7 +4,6 @@ CF := $(STD) -Wall -Isrc -O3 -fmax-errors=3 -flto
 LF := $(STD) -flto
 
 NPROC := $(shell nproc --all)
-# NPROC := 1
 
 # ROOT_CFLAGS := $(shell root-config --cflags)
 ROOT_CFLAGS := -Wno-deprecated-declarations -pthread -m64 -I$(shell root-config --incdir)
@@ -14,8 +13,11 @@ FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
 FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
-C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS) -DNPROC=$(NPROC) -DMAXNP=4
+C_hist_Hjets_mtop := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets_mtop := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+
+C_hist_Hjets_mtop_parallel := $(C_hist_Hjets_mtop) -DNPROC=$(NPROC) -DMAXNP=4
+L_hist_Hjets_mtop_parallel := $(L_hist_Hjets_mtop)
 
 SRC := src
 BIN := bin
@@ -37,9 +39,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 -include $(DEPS)
 endif
 
-$(BIN)/test_re_axes: $(BLD)/re_axes.o
-$(BIN)/hist_Hjets_mtop: $(BLD)/re_axes.o
-$(BIN)/test_binning: $(BLD)/re_axes.o
+$(BIN)/hist_Hjets_mtop $(BIN)/hist_Hjets_mtop_parallel: $(BLD)/re_axes.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@

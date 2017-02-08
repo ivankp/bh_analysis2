@@ -49,7 +49,7 @@ public:
     const int minutes = (dt-hours*3600)/60;
     const int seconds = (dt-hours*3600-minutes*60);
 
-    for (int i=0; i<nb; ++i) cout << '\b';
+    for (int i=nb; i; --i) cout << '\b';
     std::stringstream cnt_ss;
     cnt_ss.imbue(cnt_locale);
     cnt_ss << setw(14) << cnt;
@@ -68,6 +68,7 @@ public:
       cout << setw(2) << minutes << ':'
       << setfill('0') << setw(2) << seconds << setfill(' ');
     } else {
+      if (!nb) nb = 30;
       cout << setw(2) << seconds <<'s';
     }
 
@@ -93,11 +94,11 @@ public:
   timed_counter() { }
   timed_counter(value_type i, value_type n)
   : cnt(i), cnt_start(i), cnt_end(n), start(clock_type::now()), last(start),
-    past1s(false), nb(30)
+    past1s(false), nb(0)
   { print(); }
   timed_counter(value_type n)
   : cnt(0), cnt_start(0), cnt_end(n), start(clock_type::now()), last(start),
-    past1s(false), nb(30)
+    past1s(false), nb(0)
   { print(); }
   ~timed_counter() { print_last(); }
 
@@ -107,7 +108,7 @@ public:
     cnt_end = n;
     last = start = clock_type::now();
     past1s = false;
-    nb = 30;
+    nb = 0;
   }
   void set(value_type n) {
     cnt = 0;
@@ -115,7 +116,7 @@ public:
     cnt_end = n;
     last = start = clock_type::now();
     past1s = false;
-    nb = 30;
+    nb = 0;
   }
 
   inline bool ok() const noexcept { return cmp(cnt,cnt_end); }

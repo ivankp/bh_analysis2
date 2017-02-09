@@ -10,22 +10,25 @@
 
 namespace ivanp {
 
+template <typename T=void, typename Axis>
+auto make_vector_of_edges(const Axis& axis) {
+  const auto n = axis.nedges();
+  std::vector<
+    std::conditional_t<
+      std::is_same<T,void>::value, typename Axis::edge_type, T >
+  > vec;
+  vec.reserve(n);
+  for (typename Axis::size_type i=0; i<n; ++i)
+    vec.emplace_back(axis.edge(i));
+  return vec;
+}
+
 namespace detail {
 
 template <typename... A, size_t... I>
 inline std::array<axis_size_type,sizeof...(I)>
 all_nbins(const std::tuple<A...>& axes, std::index_sequence<I...>) {
   return {(std::get<I>(axes).nbins())...};
-}
-
-template <typename A>
-auto edge_vector(const A& axis) {
-  const auto n = axis.nedges();
-  using size_type = typename A::size_type;
-  std::vector<typename A::edge_type> range;
-  range.reserve(n);
-  for (size_type i=0; i<n; ++i) range.emplace_back(axis.edge(i));
-  return std::move(range);
 }
 
 template <typename... A, size_t... I>
@@ -35,7 +38,7 @@ inline auto make_ranges(
 ) -> std::tuple< std::vector<
       typename std::tuple_element_t<I,std::tuple<A...>>::edge_type>...>
 {
-  return { std::move(edge_vector(std::get<I>(axes)))... };
+  return { make_vector_of_edges(std::get<I>(axes))... };
 }
 
 template <typename... A, size_t... I>

@@ -106,7 +106,8 @@ using re_hist = ivanp::binner<hist_bin,
 
 template <typename A, typename B>
 TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
-  TH1D* h = new TH1D(name,"",axis.nbins(),axis.min(),axis.max());
+  const auto edges = ivanp::make_vector_of_edges<double>(axis);
+  TH1D* h = new TH1D(name,"",edges.size()-1,edges.data());
   h->Sumw2();
   TArrayD& sumw2 = *h->GetSumw2();
   size_t n_total = 0, i = 0;
@@ -158,13 +159,6 @@ make_TH(const std::string& name, const ivanp::binner_slice<T...>& s) {
   return h;
 }
 
-// template <size_t D, typename... A>
-// auto slice(
-//   const ivanp::binner<hist_bin,std::tuple<A...>>& h
-// ) {
-//   return ivanp::slice<D>( h.axes(), h.bins().begin(), h.bins().begin() );
-// }
-
 template <size_t I=0, typename It, typename S>
 std::enable_if_t<(I<S::slices_size),
 std::string> make_name(It it, const S& s) {
@@ -189,8 +183,7 @@ void make_root_hists(
     auto it = names.begin();
     std::string name = *it;
     name += make_name(++it,s);
-    // test(name)
-    auto *th = make_TH<D>(name,s);
+    auto *th = make_TH<D>(name,s); // makes the histograms
     if (D==1) {
       th->SetXTitle(names.begin()->c_str());
     } else if (D==2) {
@@ -209,9 +202,8 @@ TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
   return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
 }
 
-int main(int argc, char* argv[])
-{
-  fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
+int main(int argc, char* argv[]) {
+  const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
   constexpr unsigned need_njets = 2;
@@ -340,7 +332,11 @@ int main(int argc, char* argv[])
 
   // Open input ntuple root file
   TChain chain("t3");
-  for (int i=2; i<argc; ++i) { chain.Add(argv[i]); }
+  for (int i=2; i<argc; ++i) {
+    if (!chain.Add(argv[i],0)) return 1;
+    cout << "\033[36mInput\033[0m: " << argv[i] << endl;
+  }
+  cout << endl;
 
   // Set up branches for reading
   TTreeReader reader(&chain);
@@ -366,6 +362,8 @@ int main(int argc, char* argv[])
 
   std::vector<fj::PseudoJet> particles;
   Int_t prev_id = -1, curr_id;
+
+  fastjet::ClusterSequence::print_banner(); // get it out of the way
 
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
@@ -653,6 +651,7 @@ int main(int argc, char* argv[])
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
   fout->Write();
+  cout << "\033[32mOutput\033[0m: " << fout->GetName() << endl;
 
   return 0;
 }

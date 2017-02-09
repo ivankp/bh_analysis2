@@ -1,6 +1,6 @@
 STD := -std=c++14
 DF := $(STD) -Isrc
-CF := $(STD) -Wall -Isrc -O3 -fmax-errors=3 -flto
+CF := $(STD) -Wall -Isrc -O3 -fmax-errors=3 -flto -ffast-math
 LF := $(STD) -flto
 
 NPROC := $(shell nproc --all)

@@ -10,7 +10,7 @@ namespace ivanp {
 template <typename... T> struct make_void { typedef void type; };
 template <typename... T> using void_t = typename make_void<T...>::type;
 
-template <typename New, typename Old> using replace_t = New;
+template <typename Old, typename New> using replace_t = New;
 
 // Operations on traits *********************************************
 

@@ -212,14 +212,14 @@ public:
   inline const container_type& bins() const noexcept { return _bins; }
   inline container_type& bins() noexcept { return _bins; }
 
-  constexpr size_type index(replace_t<size_type,Ax>... ii) const noexcept {
+  constexpr size_type index(replace_t<Ax,size_type>... ii) const noexcept {
     return index_impl(ii...);
   }
   constexpr size_type index(index_array_cref ii) const noexcept {
     return index_impl(ii,std::make_index_sequence<naxes>());
   }
 
-  inline const value_type& bin(replace_t<size_type,Ax>... ii) const {
+  inline const value_type& bin(replace_t<Ax,size_type>... ii) const {
     return _bins[index_impl(ii...)];
   }
   inline const value_type& bin(index_array_cref ii) const {

@@ -21,17 +21,17 @@ class timed_counter {
   static_assert( std::is_integral<CntType>::value,
     "Cannot instantiate timed_counter of non-integral type");
 public:
-  using value_type    = CntType;
-  using compare_type  = Compare;
-  using clock_type    = std::chrono::system_clock;
-  using time_type     = std::chrono::time_point<clock_type>;
-  using duration_type = std::chrono::duration<double>;
+  using value_type   = CntType;
+  using compare_type = Compare;
+  using clock_type   = std::chrono::system_clock;
+  using time_type    = std::chrono::time_point<clock_type>;
+  using sec_type     = std::chrono::duration<double>;
+  using ms_type      = std::chrono::duration<double,std::milli>;
 
 private:
   value_type cnt, cnt_start, cnt_end;
-  time_type start, last;
-  bool past1s;
-  int nb;
+  time_type start = clock_type::now(), last = start;
+  int nb = 30;
   compare_type cmp;
 
   static const std::locale cnt_locale;
@@ -44,12 +44,11 @@ public:
     std::ios::fmtflags f(cout.flags());
     auto prec = cout.precision();
 
-    const auto dt = duration_type((last = clock_type::now()) - start).count();
+    const auto dt = sec_type((last = clock_type::now()) - start).count();
     const int hours   = dt/3600;
     const int minutes = (dt-hours*3600)/60;
     const int seconds = (dt-hours*3600-minutes*60);
 
-    for (int i=nb; i; --i) cout << '\b';
     std::stringstream cnt_ss;
     cnt_ss.imbue(cnt_locale);
     cnt_ss << setw(14) << cnt;
@@ -67,57 +66,37 @@ public:
       if (nb<32) nb = 32;
       cout << setw(2) << minutes << ':'
       << setfill('0') << setw(2) << seconds << setfill(' ');
+    } else if (seconds) {
+      cout << setw(2) << seconds << 's';
     } else {
-      if (!nb) nb = 30;
-      cout << setw(2) << seconds <<'s';
+      cout << int(ms_type(clock_type::now() - start).count()) << "ms";
     }
 
     cout.flush();
+    for (int i=nb; i; --i) cout << '\b';
     cout.flags(f);
     cout.precision(prec);
   }
   void print_check() {
-    if ( duration_type(clock_type::now()-last).count() > 1 ) {
-      print();
-      if (!past1s) past1s = true;
-    }
-  }
-  void print_last() {
-    print();
-    if (!past1s) {
-      std::chrono::duration<double,std::milli> ms(clock_type::now() - start);
-      std::cout << "\b\b\b" << int(ms.count()) << "ms";
-    }
-    std::cout << std::endl;
+    if ( sec_type(clock_type::now()-last).count() > 1 ) print();
   }
 
   timed_counter() { }
-  timed_counter(value_type i, value_type n)
-  : cnt(i), cnt_start(i), cnt_end(n), start(clock_type::now()), last(start),
-    past1s(false), nb(0)
+  timed_counter(value_type i, value_type n): cnt(i), cnt_start(i), cnt_end(n)
   { print(); }
-  timed_counter(value_type n)
-  : cnt(0), cnt_start(0), cnt_end(n), start(clock_type::now()), last(start),
-    past1s(false), nb(0)
+  timed_counter(value_type n): cnt(0), cnt_start(0), cnt_end(n)
   { print(); }
-  ~timed_counter() { print_last(); }
+  ~timed_counter() { print(); std::cout << std::endl; }
 
-  void set(value_type i, value_type n) {
+  inline void reset(value_type i, value_type n) {
     cnt = i;
     cnt_start = i;
     cnt_end = n;
-    last = start = clock_type::now();
-    past1s = false;
-    nb = 0;
+    start = clock_type::now();
+    last = start;
+    nb = 30;
   }
-  void set(value_type n) {
-    cnt = 0;
-    cnt_start = 0;
-    cnt_end = n;
-    last = start = clock_type::now();
-    past1s = false;
-    nb = 0;
-  }
+  inline void reset(value_type n) { set(0,n); }
 
   inline bool ok() const noexcept { return cmp(cnt,cnt_end); }
 

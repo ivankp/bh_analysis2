@@ -591,7 +591,7 @@ int main(int argc, char* argv[]) {
   auto fout = std::make_unique<TFile>(argv[1],"recreate");
   if (fout->IsZombie()) return 1;
 
-  fout->mkdir("weight2_JetAntiKt4")->cd();
+  fout->mkdir("weight_JetAntiKt4")->cd();
 
   // write root historgrams
   root_hist(h_Njets,"jets_N_excl");

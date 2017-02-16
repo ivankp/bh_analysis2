@@ -10,9 +10,21 @@ namespace ivanp {
 template <typename... T> struct make_void { typedef void type; };
 template <typename... T> using void_t = typename make_void<T...>::type;
 
-template <typename Old, typename New> using replace_t = New;
+template <typename Old, typename New> using type_to_type = New;
+template <size_t I, typename T> using index_to_type = T;
 
-// Operations on traits *********************************************
+template <typename T>
+struct add_const_to_ref { using type = T; };
+template <typename T>
+struct add_const_to_ref<T&> { using type = const T&; };
+template <typename T>
+using add_const_to_ref_t = typename add_const_to_ref<T>::type;
+
+template <typename T> struct remove_rref      { using type = T; };
+template <typename T> struct remove_rref<T&&> { using type = T; };
+template <typename T> using remove_rref_t = typename remove_rref<T>::type;
+
+// trait composition ************************************************
 
 template<class...> struct conjunction: std::true_type { };
 template<class B1> struct conjunction<B1>
@@ -28,34 +40,6 @@ template<class B1, class... Bn> struct disjunction<B1, Bn...>
 : std::conditional_t<bool(B1::value),
   disjunction<B1>, disjunction<Bn...>>  { };
 
-// ******************************************************************
-
-#ifdef _GLIBCXX_UTILITY
-template <typename Seq, typename Seq::value_type Inc>
-struct increment_integer_sequence;
-template <typename T, T... I, T Inc>
-struct increment_integer_sequence<std::integer_sequence<T,I...>, Inc> {
-  using type = std::integer_sequence<T,(I+Inc)...>;
-};
-
-template <size_t A, size_t B>
-using index_sequence_tail
-  = typename increment_integer_sequence<std::make_index_sequence<B-A>,A>::type;
-#endif
-
-// ******************************************************************
-
-template <typename T, bool Scalar = std::is_scalar<T>::value>
-struct const_ref_if_not_scalar {
-  using type = std::add_lvalue_reference_t<std::add_const_t<T>>;
-};
-template <typename T>
-struct const_ref_if_not_scalar<T,true> {
-  using type = T;
-};
-template <typename T>
-using const_ref_if_not_scalar_t = typename const_ref_if_not_scalar<T>::type;
-
 // IS ***************************************************************
 
 #ifdef _GLIBCXX_ARRAY
@@ -70,15 +54,22 @@ template <typename T, typename Alloc>
 struct is_std_vector<std::vector<T,Alloc>>: std::true_type { };
 #endif
 
-#ifdef _GLIBCXX_UTILITY
-template <typename> struct is_integer_sequence: std::false_type { };
-template <typename T, T... Ints>
-struct is_integer_sequence<std::integer_sequence<T,Ints...>>: std::true_type { };
-#endif
-
-// Tuple of same types **********************************************
+// Tuple ************************************************************
 
 #ifdef _GLIBCXX_TUPLE
+template <size_t... I, typename... T>
+auto make_ref_subtuple(std::tuple<T...>& t, std::index_sequence<I...>) {
+  return std::tie( std::get<I>(t)... );
+}
+
+template <typename Tup, typename Elems> struct subtuple;
+template <typename... T, size_t... I>
+struct subtuple<std::tuple<T...>,std::index_sequence<I...>> {
+  using type = std::tuple<std::tuple_element_t<I,std::tuple<T...>>...>;
+};
+template <typename Tup, typename Elems>
+using subtuple_t = typename subtuple<Tup,Elems>::type;
+
 namespace detail {
 template <typename T, typename S> struct tuple_of_same_impl { };
 template <typename T, size_t... I>

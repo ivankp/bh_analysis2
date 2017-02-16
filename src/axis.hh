@@ -7,16 +7,55 @@
 #include <cmath>
 #include <utility>
 #include <vector>
-#include <stdexcept>
-#include <sstream>
 #include <memory>
 #include <limits>
 
 #include "type_traits.hh"
-
-#include <iostream>
+#include "exception.hh"
 
 namespace ivanp {
+
+using axis_size_type = unsigned;
+
+template <typename T>
+class edge_proxy {
+public:
+  enum state : char { minf = -1, ok = 0, pinf = 1 };
+  using type = T;
+
+private:
+  state s;
+  T x;
+
+public:
+  edge_proxy(state s): s{s}, x{
+    s==pinf ?  std::numeric_limits<T>::infinity() :
+    s==minf ? -std::numeric_limits<T>::infinity() : T{ }
+  } { }
+
+  template <typename U>
+  edge_proxy& operator=(U&& x) {
+    s = ok;
+    this->x = std::forward<U>(x);
+    return *this;
+  }
+
+  inline operator bool() const noexcept { return s == ok; }
+  template <typename U = T>
+  inline operator std::enable_if_t<!std::is_same<U,bool>::value,U>()
+    const noexcept { return x; }
+  inline T get() const noexcept { return x; }
+
+  friend std::ostream& operator<<(std::ostream& os, const edge_proxy& p) {
+    switch (p.s) {
+      case   ok: os << p.x;  break;
+      case pinf: os <<  "∞"; break;
+      case minf: os << "-∞"; break;
+    }
+    return os;
+  }
+};
+
 
 // INFO =============================================================
 
@@ -30,44 +69,26 @@ namespace ivanp {
 
 // Abstract Axis ====================================================
 
-using axis_size_type = unsigned;
-
 template <typename EdgeType>
 class abstract_axis {
 public:
   using size_type = axis_size_type;
   using edge_type = EdgeType;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
 
   virtual size_type nbins () const = 0;
   virtual size_type nedges() const = 0;
 
-  virtual size_type vfind_bin(edge_cref x) const = 0;
-  inline  size_type  find_bin(edge_cref x) const { return vfind_bin(x); }
+  virtual size_type vfind_bin(edge_type x) const = 0;
+  inline  size_type  find_bin(edge_type x) const { return vfind_bin(x); }
 
-  virtual edge_cref edge(size_type i) const = 0;
-  virtual edge_cref min() const = 0;
-  virtual edge_cref max() const = 0;
-  virtual edge_cref lower(size_type bin) const = 0;
-  virtual edge_cref upper(size_type bin) const = 0;
+  virtual edge_type edge(size_type i) const = 0;
+  virtual edge_type min() const = 0;
+  virtual edge_type max() const = 0;
+  virtual edge_ptype lower(size_type i) const = 0;
+  virtual edge_ptype upper(size_type i) const = 0;
 
-  inline bool check_edge(size_type i) const { return (i < nedges()); }
-  inline void check_edge_throw(size_type i) const {
-    if (!check_edge(i)) {
-      std::ostringstream ss("Axis edge index ");
-      ss << i << " >= " << nedges();
-      throw std::range_error(ss.str());
-    }
-  }
-  inline bool check_bin(size_type bin) const { return (bin < nbins()); }
-  inline void check_bin_throw(size_type bin) const {
-    if (!check_bin(bin)) {
-      std::ostringstream ss("Axis bin index ");
-      ss << bin << " >= " << nbins();
-      throw std::range_error(ss.str());
-    }
-  }
-
+  virtual bool is_uniform() const = 0;
 };
 
 // Blank axis base ==================================================
@@ -87,7 +108,7 @@ public:
     axis_base>;
   using container_type = Container;
   using edge_type = typename std::decay_t<container_type>::value_type;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
   using size_type = ivanp::axis_size_type;
 
 private:
@@ -143,15 +164,25 @@ public:
   inline size_type nbins () const noexcept(noexcept(_edges.size()))
   { return _edges.size()-1; }
 
-  inline edge_cref edge(size_type i) const noexcept { return _edges[i]; }
+  inline edge_type edge(size_type i) const noexcept { return _edges[i]; }
 
-  inline edge_cref min() const noexcept(noexcept(_edges.front()))
+  inline edge_type min() const noexcept(noexcept(_edges.front()))
   { return _edges.front(); }
-  inline edge_cref max() const noexcept(noexcept(_edges.back()))
+  inline edge_type max() const noexcept(noexcept(_edges.back()))
   { return _edges.back(); }
 
-  inline edge_cref lower(size_type bin) const noexcept { return _edges[bin-1];}
-  inline edge_cref upper(size_type bin) const noexcept { return _edges[bin]; }
+  inline edge_ptype lower(size_type i) const noexcept {
+    edge_ptype proxy(
+      i==0 ? edge_ptype::minf :
+      i>nedges()+1 ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i-1);
+    return proxy;
+  }
+  inline edge_ptype upper(size_type i) const noexcept {
+    edge_ptype proxy( i>=nedges() ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i);
+    return proxy;
+  }
 
   template <typename T>
   size_type find_bin(const T& x) const noexcept {
@@ -159,7 +190,7 @@ public:
       _edges.begin(), std::upper_bound(_edges.begin(), _edges.end(), x)
     );
   }
-  inline size_type vfind_bin(edge_cref x) const { return find_bin(x); }
+  inline size_type vfind_bin(edge_type x) const { return find_bin(x); }
 
   template <typename T>
   inline size_type operator[](const T& x) const noexcept {
@@ -167,6 +198,8 @@ public:
   }
 
   inline const container_type& edges() const { return _edges; }
+
+  constexpr bool is_uniform() const noexcept { return false; }
 
 };
 
@@ -180,7 +213,7 @@ public:
   using base_type = std::conditional_t<Inherit,
     abstract_axis<EdgeType>, axis_base>;
   using edge_type = EdgeType;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
   using size_type = ivanp::axis_size_type;
 
 private:
@@ -190,7 +223,7 @@ private:
 public:
   uniform_axis() = default;
   ~uniform_axis() = default;
-  uniform_axis(size_type nbins, edge_cref min, edge_cref max)
+  uniform_axis(size_type nbins, edge_type min, edge_type max)
   : _nbins(nbins), _min(std::min(min,max)), _max(std::max(min,max)) { }
   uniform_axis(const uniform_axis& axis)
   : _nbins(axis._nbins), _min(axis._min), _max(axis._max) { }
@@ -204,16 +237,26 @@ public:
   inline size_type nbins () const noexcept { return _nbins; }
   inline size_type nedges() const noexcept { return _nbins+1; }
 
-  inline edge_cref edge(size_type i) const noexcept {
+  inline edge_type edge(size_type i) const noexcept {
     const auto width = (_max - _min)/_nbins;
     return _min + i*width;
   }
 
-  inline edge_cref min() const noexcept { return _min; }
-  inline edge_cref max() const noexcept { return _max; }
+  inline edge_type min() const noexcept { return _min; }
+  inline edge_type max() const noexcept { return _max; }
 
-  inline edge_cref lower(size_type bin) const noexcept { return edge(bin-1); }
-  inline edge_cref upper(size_type bin) const noexcept { return edge(bin); }
+  inline edge_ptype lower(size_type i) const noexcept {
+    edge_ptype proxy(
+      i==0 ? edge_ptype::minf :
+      i>nedges()+1 ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i-1);
+    return proxy;
+  }
+  inline edge_ptype upper(size_type i) const noexcept {
+    edge_ptype proxy( i>=nedges() ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i);
+    return proxy;
+  }
 
   template <typename T>
   size_type find_bin(const T& x) const noexcept {
@@ -222,12 +265,14 @@ public:
     return _nbins*(x-_min)/(_max-_min) + 1;
   }
 
-  inline size_type vfind_bin(edge_cref x) const noexcept
+  inline size_type vfind_bin(edge_type x) const noexcept
   { return find_bin(x); }
 
   template <typename T>
   inline size_type operator[](const T& x) const noexcept
   { return find_bin(x); }
+
+  constexpr bool is_uniform() const noexcept { return true; }
 
 };
 
@@ -242,7 +287,7 @@ public:
   using base_type = std::conditional_t<Inherit,
     abstract_axis<ivanp::axis_size_type>, axis_base>;
   using edge_type = EdgeType;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
   using size_type = ivanp::axis_size_type;
 
 private:
@@ -251,7 +296,7 @@ private:
 public:
   index_axis() = default;
   ~index_axis() = default;
-  constexpr index_axis(edge_cref min, edge_cref max)
+  constexpr index_axis(edge_type min, edge_type max)
   : _min(std::min(min,max)), _max(std::max(min,max)) { }
   constexpr index_axis(const index_axis& axis)
   : _min(axis._min), _max(axis._max) { }
@@ -264,13 +309,23 @@ public:
   constexpr size_type nbins () const noexcept { return _max-_min; }
   constexpr size_type nedges() const noexcept { return _max-_min+1; }
 
-  constexpr edge_cref edge(size_type i) const noexcept { return _min + i; }
+  constexpr edge_type edge(size_type i) const noexcept { return _min + i; }
 
-  constexpr edge_cref min() const noexcept { return _min; }
-  constexpr edge_cref max() const noexcept { return _max; }
+  constexpr edge_type min() const noexcept { return _min; }
+  constexpr edge_type max() const noexcept { return _max; }
 
-  constexpr edge_cref lower(size_type bin) const noexcept {return edge(bin-1);}
-  constexpr edge_cref upper(size_type bin) const noexcept {return edge(bin); }
+  inline edge_ptype lower(size_type i) const noexcept {
+    edge_ptype proxy(
+      i==0 ? edge_ptype::minf :
+      i>nedges()+1 ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i-1);
+    return proxy;
+  }
+  inline edge_ptype upper(size_type i) const noexcept {
+    edge_ptype proxy( i>=nedges() ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i);
+    return proxy;
+  }
 
   template <typename T>
   constexpr size_type find_bin(const T& x) const noexcept {
@@ -279,12 +334,14 @@ public:
     return x-_min+1;
   }
 
-  constexpr size_type vfind_bin(edge_cref x) const noexcept
+  constexpr size_type vfind_bin(edge_type x) const noexcept
   { return find_bin(x); }
 
   template <typename T>
   constexpr size_type operator[](const T& x) const noexcept
   { return find_bin(x); }
+
+  constexpr bool is_uniform() const noexcept { return true; }
 
 };
 
@@ -299,7 +356,7 @@ public:
   using base_type = std::conditional_t<Inherit,
     abstract_axis<EdgeType>, axis_base>;
   using edge_type = EdgeType;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
   using size_type = ivanp::axis_size_type;
   using axis_ref  = Ref;
 
@@ -331,15 +388,17 @@ public:
   inline size_type nedges() const { return _ref->nedges(); }
   inline size_type nbins () const { return _ref->nbins (); }
 
-  inline size_type vfind_bin (edge_cref x) const { return _ref->vfind_bin(x); }
-  inline size_type  find_bin (edge_cref x) const { return _ref->vfind_bin(x); }
-  inline size_type operator[](edge_cref x) const { return _ref->vfind_bin(x); }
+  inline size_type vfind_bin (edge_type x) const { return _ref->vfind_bin(x); }
+  inline size_type  find_bin (edge_type x) const { return _ref->vfind_bin(x); }
+  inline size_type operator[](edge_type x) const { return _ref->vfind_bin(x); }
 
-  inline edge_cref edge(size_type i) const { return _ref->edge(i); }
-  inline edge_cref min() const { return _ref->min(); }
-  inline edge_cref max() const { return _ref->max(); }
-  inline edge_cref lower(size_type bin) const { return _ref->lower(bin); }
-  inline edge_cref upper(size_type bin) const { return _ref->upper(bin); }
+  inline edge_type edge(size_type i) const { return _ref->edge(i); }
+  inline edge_type min() const { return _ref->min(); }
+  inline edge_type max() const { return _ref->max(); }
+  inline edge_ptype lower(size_type i) const { return _ref->lower(i); }
+  inline edge_ptype upper(size_type i) const { return _ref->upper(i); }
+
+  inline bool is_uniform() const noexcept { return _ref->is_uniform(); }
 
 };
 
@@ -399,7 +458,7 @@ public:
   using base_type = std::conditional_t<Inherit,
     abstract_axis<EdgeType>, axis_base>;
   using edge_type = EdgeType;
-  using edge_cref = const_ref_if_not_scalar_t<edge_type>;
+  using edge_ptype = edge_proxy<edge_type>;
   using size_type = ivanp::axis_size_type;
 
 private:
@@ -413,17 +472,25 @@ public:
   constexpr size_type nedges() const noexcept { return _ne+1; }
   constexpr size_type nbins () const noexcept { return _ne; }
 
-  constexpr edge_cref edge(size_type i) const noexcept { return _edges[i]; }
+  constexpr edge_type edge(size_type i) const noexcept { return _edges[i]; }
 
-  constexpr edge_cref min() const noexcept { return _edges[0]; }
-  constexpr edge_cref max() const noexcept { return _edges[_ne]; }
+  constexpr edge_type min() const noexcept { return _edges[0]; }
+  constexpr edge_type max() const noexcept { return _edges[_ne]; }
 
-  constexpr edge_cref lower(size_type bin) const noexcept
-  { return _edges[bin-1]; }
-  constexpr edge_cref upper(size_type bin) const noexcept
-  { return _edges[bin]; }
+  inline edge_ptype lower(size_type i) const noexcept {
+    edge_ptype proxy(
+      i==0 ? edge_ptype::minf :
+      i>nedges()+1 ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i-1);
+    return proxy;
+  }
+  inline edge_ptype upper(size_type i) const noexcept {
+    edge_ptype proxy( i>=nedges() ? edge_ptype::pinf : edge_ptype::ok );
+    if (proxy) proxy = edge(i);
+    return proxy;
+  }
 
-  constexpr size_type find_bin(edge_cref x) const noexcept {
+  constexpr size_type find_bin(edge_type x) const noexcept {
     size_type i = 0, j = 0, count = _ne, step = 0;
 
     if (!(x < _edges[_ne])) i = _ne + 1;
@@ -437,14 +504,27 @@ public:
     }
     return i;
   }
-  constexpr size_type operator[](edge_cref x) const noexcept
+  constexpr size_type operator[](edge_type x) const noexcept
   { return find_bin(x); }
-  inline size_type vfind_bin(edge_cref x) const noexcept
+  inline size_type vfind_bin(edge_type x) const noexcept
   { return find_bin(x); }
+
+  constexpr bool is_uniform() const noexcept { return false; }
 
 };
 
 // ==================================================================
+
+template <typename T, typename Axis>
+auto vector_of_edges(const Axis& axis) {
+  const auto n = axis.nedges();
+  std::vector<T> edges;
+  edges.reserve(n);
+  for (typename Axis::size_type i=0; i<n; ++i)
+    edges.emplace_back(axis.edge(i));
+  return edges;
+}
+
 } // end namespace ivanp
 
 #endif

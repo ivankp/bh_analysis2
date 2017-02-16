@@ -5,6 +5,10 @@
 
 namespace ivanp {
 
+template <typename T> constexpr T zero(T) { return 0; }
+
+template <typename T> const T& as_const(T& x) { return x; }
+
 template <typename T>
 struct named_ptr {
   using type = T;
@@ -28,6 +32,13 @@ auto reserve(size_t n) {
   std::vector<T> _v;
   _v.reserve(n);
   return _v;
+}
+#endif
+
+#ifdef _GLIBCXX_ARRAY
+template <typename T, typename... Args>
+std::array<T,sizeof...(Args)> make_array(Args&&... args) {
+  return { std::forward<Args>(args)... };
 }
 #endif
 

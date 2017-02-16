@@ -11,6 +11,7 @@
 #include "axis.hh"
 #include "default_bin_filler.hh"
 #include "utility.hh"
+#include "sequence_traits.hh"
 
 namespace ivanp {
 
@@ -39,9 +40,9 @@ public:
   template <unsigned I>
   using axis_spec = std::tuple_element_t<I,axes_specs>;
   template <unsigned I>
-  using axis_type = typename axis_spec<I>::axis;
+  using axis_type = std::decay_t<typename axis_spec<I>::axis>;
   template <unsigned I>
-  using edge_type = typename std::decay_t<axis_type<I>>::edge_type;
+  using edge_type = typename axis_type<I>::edge_type;
   using container_type = Container;
   using filler_type = Filler;
   using value_type = typename container_type::value_type;
@@ -177,6 +178,10 @@ public:
     all.emplace_back(this,std::forward<Name>(name));
   }
 
+  template <typename C>
+  binner(std::tuple<typename Ax::axis...>&& axes, C&& bins)
+  : _axes(axes), _bins(std::forward<C>(bins)) { }
+
   binner(const binner& o): _axes(o._axes), _bins(o._bins) { }
   binner(binner&& o): _axes(std::move(o._axes)), _bins(std::move(o._bins)) { }
   binner& operator=(const binner& o) {
@@ -212,14 +217,14 @@ public:
   inline const container_type& bins() const noexcept { return _bins; }
   inline container_type& bins() noexcept { return _bins; }
 
-  constexpr size_type index(replace_t<Ax,size_type>... ii) const noexcept {
+  constexpr size_type index(type_to_type<Ax,size_type>... ii) const noexcept {
     return index_impl(ii...);
   }
   constexpr size_type index(index_array_cref ii) const noexcept {
     return index_impl(ii,std::make_index_sequence<naxes>());
   }
 
-  inline const value_type& bin(replace_t<Ax,size_type>... ii) const {
+  inline const value_type& bin(type_to_type<Ax,size_type>... ii) const {
     return _bins[index_impl(ii...)];
   }
   inline const value_type& bin(index_array_cref ii) const {
@@ -266,7 +271,7 @@ public:
       find_bin_tuple(tup,std::make_index_sequence<naxes>());
     if (bin == size_type(-1)) return size_type(-1);
     return fill_bin_tuple( bin,
-      tup, index_sequence_tail<naxes,sizeof...(Args)>()
+      tup, ivanp::seq::make_index_range<naxes,sizeof...(Args)>()
     );
   }
   template <typename... Args>

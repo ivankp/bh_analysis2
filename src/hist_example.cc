@@ -16,19 +16,17 @@
 #include <TDirectory.h>
 #include <TKey.h>
 #include <TH1.h>
-#include <TH2.h>
 #include <TLorentzVector.h>
 
 #include <fastjet/ClusterSequence.hh>
 
 #include "math.hh"
-#include "binner.hh"
-#include "re_axes.hh"
 #include "timed_counter.hh"
 #include "catstr.hh"
 #include "exception.hh"
 #include "float_or_double_reader.hh"
-#include "slice.hh"
+#include "binner_root.hh"
+#include "re_axes.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -78,32 +76,9 @@ template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
-template <size_t N>
-using re_hist = ivanp::binner<hist_bin,
-  ivanp::tuple_of_same_t<ivanp::axis_spec<re_axis>,N>>;
-
-template <typename A, typename B>
-TH1D* make_TH1D(const char* name, const A& axis, B begin, B end) {
-  const auto edges = ivanp::make_vector_of_edges<double>(axis);
-  TH1D* h = new TH1D(name,"",edges.size()-1,edges.data());
-  h->Sumw2();
-  TArrayD& sumw2 = *h->GetSumw2();
-  size_t n_total = 0, i = 0;
-  for (auto bin=begin; bin!=end; ++bin, ++i) {
-    h->SetBinContent(i,bin->w);
-    sumw2[i] = bin->w2;
-    n_total += bin->n;
-  }
-  h->SetEntries(n_total);
-  return h;
-}
-
-template <typename A>
-TH1D* root_hist(const ivanp::binner<hist_bin,std::tuple<A>>& h,
-  const std::string& name
-) {
-  return make_TH1D(name.c_str(),h.axis(),h.bins().begin(),h.bins().end());
-}
+template <bool... OF>
+using re_hist = ivanp::binner<hist_bin, std::tuple<
+  ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 int main(int argc, char* argv[]) {
   const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
@@ -291,11 +266,14 @@ int main(int argc, char* argv[]) {
   fout->mkdir("weight_JetAntiKt4")->cd();
 
   // write root historgrams
-  root_hist(h_Njets,"jets_N_excl");
-  h_Njets.integrate_left();
-  root_hist(h_Njets,"jets_N_incl");
+  using ivanp::root::to_root;
+  using ivanp::root::slice_to_root;
 
-  for (auto& h : re_hist<1>::all) root_hist(*h,h.name);
+  to_root(h_Njets,"jets_N_excl");
+  h_Njets.integrate_left();
+  to_root(h_Njets,"jets_N_incl");
+
+  for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

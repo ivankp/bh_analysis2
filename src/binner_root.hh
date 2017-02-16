@@ -70,12 +70,9 @@ TH3D* make_TH(const std::string& name, const std::tuple<A1,A2,A3>& axes) {
 
 template <typename Bin>
 struct bin_converter {
-  inline const auto& weight(const Bin& b)
-    const noexcept(noexcept(b.weight())) { return b.weight(); }
-  inline const auto& sumw2(const Bin& b)
-    const noexcept(noexcept(b.sumw2())) { return b.sumw2(); }
-  inline const auto& num(const Bin& b)
-    const noexcept(noexcept(b.num())) { return b.num(); }
+  inline auto weight(const Bin& b) const noexcept { return b.w;  }
+  inline auto  sumw2(const Bin& b) const noexcept { return b.w2; }
+  inline auto    num(const Bin& b) const noexcept { return b.n;  }
 };
 
 namespace detail {

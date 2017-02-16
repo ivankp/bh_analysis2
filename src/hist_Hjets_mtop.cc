@@ -91,14 +91,6 @@ struct hist_bin {
 };
 double hist_bin::weight;
 
-namespace ivanp { namespace root {
-template <> struct bin_converter<hist_bin> {
-  inline double weight(const hist_bin& b) const noexcept { return b.w;  }
-  inline double  sumw2(const hist_bin& b) const noexcept { return b.w2; }
-  inline double    num(const hist_bin& b) const noexcept { return b.n;  }
-};
-}}
-
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
   std::tuple<ivanp::axis_spec<Axes>...>>;
@@ -226,14 +218,14 @@ int main(int argc, char* argv[]) {
 
   // xi vs xj in bins of HT
   a_(_x3)
-  re_hist<1,0,0>
+  re_hist<1,1,0>
     h_xH_x1_HT(a__x3,a__x3,a__HT),
     h_xH_x2_HT(a__x3,a__x3,a__HT),
     h_x1_x2_HT(a__x3,a__x3,a__HT);
 
   // maxdy vs maxdphi in bins of HT
   a_(_maxdy2) a_(_maxdphi2)
-  re_hist<1,0,0>
+  re_hist<1,1,0>
     h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
 
   // ================================================================
@@ -508,8 +500,6 @@ int main(int argc, char* argv[]) {
   to_root(h_Njets,"jets_N_excl");
   h_Njets.integrate_left();
   to_root(h_Njets,"jets_N_incl");
-
-  using namespace ivanp::root;
 
   for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 

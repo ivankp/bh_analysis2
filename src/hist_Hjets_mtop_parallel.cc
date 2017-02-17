@@ -322,9 +322,6 @@ struct histogram_handler {
       to_root(*h,h.name);
     }
 
-    const auto HT_lbl = std::make_tuple("HT");
-    const auto HT_maxdy_lbl = std::make_tuple("HT","maxdy");
-
 
     merge_bins(h_xH_x1_HT);
     merge_bins(h_xH_x2_HT);
@@ -368,53 +365,53 @@ struct histogram_handler {
     merge_bins(h_qq_x2_HT_maxdy);
 
 
-    slice_to_root<2>(h_xH_x1_HT,"xH_x1",HT_lbl);
-    slice_to_root<2>(h_xH_x2_HT,"xH_x2",HT_lbl);
-    slice_to_root<2>(h_x1_x2_HT,"x1_x2",HT_lbl);
+    slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
+    slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
+    slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
 
-    slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi",HT_lbl);
+    slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
 
-    slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT",std::forward_as_tuple("xH"));
-    slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT",std::forward_as_tuple("x1"));
-    slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT",std::forward_as_tuple("x2"));
-    slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT",std::forward_as_tuple("xH"));
-    slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT",std::forward_as_tuple("x1"));
-    slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT",std::forward_as_tuple("x2"));
-    slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT",std::forward_as_tuple("xH"));
-    slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT",std::forward_as_tuple("x1"));
-    slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT",std::forward_as_tuple("x2"));
+    slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
+    slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
+    slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
 
-    slice_to_root<1>(h_xH_HT,"xH",HT_lbl);
-    slice_to_root<1>(h_x1_HT,"x1",HT_lbl);
-    slice_to_root<1>(h_x2_HT,"x2",HT_lbl);
+    slice_to_root<1>(h_xH_HT,"xH","HT");
+    slice_to_root<1>(h_x1_HT,"x1","HT");
+    slice_to_root<1>(h_x2_HT,"x2","HT");
 
-    slice_to_root<1>(h_xH_HT_maxdy,"xH",HT_maxdy_lbl);
-    slice_to_root<1>(h_x1_HT_maxdy,"x1",HT_maxdy_lbl);
-    slice_to_root<1>(h_x2_HT_maxdy,"x2",HT_maxdy_lbl);
+    slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
+    slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
+    slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
 
-    slice_to_root<1>(h_gg_xH_HT,"gg_xH",HT_lbl);
-    slice_to_root<1>(h_gg_x1_HT,"gg_x1",HT_lbl);
-    slice_to_root<1>(h_gg_x2_HT,"gg_x2",HT_lbl);
+    slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
+    slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
+    slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
 
-    slice_to_root<1>(h_gq_xH_HT,"gq_xH",HT_lbl);
-    slice_to_root<1>(h_gq_x1_HT,"gq_x1",HT_lbl);
-    slice_to_root<1>(h_gq_x2_HT,"gq_x2",HT_lbl);
+    slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
+    slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
+    slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
 
-    slice_to_root<1>(h_qq_xH_HT,"qq_xH",HT_lbl);
-    slice_to_root<1>(h_qq_x1_HT,"qq_x1",HT_lbl);
-    slice_to_root<1>(h_qq_x2_HT,"qq_x2",HT_lbl);
+    slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
+    slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
+    slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
 
-    slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH",HT_maxdy_lbl);
-    slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1",HT_maxdy_lbl);
-    slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2",HT_maxdy_lbl);
+    slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
+    slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
+    slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
 
-    slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH",HT_maxdy_lbl);
-    slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1",HT_maxdy_lbl);
-    slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2",HT_maxdy_lbl);
+    slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
+    slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
+    slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
 
-    slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH",HT_maxdy_lbl);
-    slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1",HT_maxdy_lbl);
-    slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2",HT_maxdy_lbl);
+    slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
+    slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
+    slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
 
     fout->cd();
     (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);

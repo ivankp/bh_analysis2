@@ -8,6 +8,33 @@
 namespace ivanp {
 namespace root {
 
+namespace detail {
+
+template <size_t D> struct TH {
+  static_assert( D==1 || D==2 || D==3, "ROOT has only TH1, TH2, TH3");
+#ifndef ROOT_TH1
+  static_assert( D!=1, "\033[33mTH1.h is no included\033[0m");
+#endif
+#ifndef ROOT_TH2
+  static_assert( D!=2, "\033[33mTH2.h is no included\033[0m");
+#endif
+#ifndef ROOT_TH3
+  static_assert( D!=3, "\033[33mTH3.h is no included\033[0m");
+#endif
+};
+#ifdef ROOT_TH1
+template <> struct TH<1> { using type = TH1D; };
+#endif
+#ifdef ROOT_TH2
+template <> struct TH<2> { using type = TH2D; };
+#endif
+#ifdef ROOT_TH3
+template <> struct TH<3> { using type = TH3D; };
+#endif
+template <size_t D> using TH_t = typename TH<D>::type;
+
+}
+
 #ifdef ROOT_TH1
 template <typename A1>
 TH1D* make_TH(const std::string& name, const std::tuple<A1>& axes) {
@@ -131,14 +158,25 @@ inline std::enable_if_t<Use> set_num(TH1* h, const Bins& bins, F get) {
   h->SetEntries(n_total);
 }
 
+template <typename... Args>
+class last_is_empty {
+  template <typename Last, typename = void> struct impl : std::false_type { };
+  template <typename Last>
+  struct impl<Last, std::enable_if_t< std::is_empty<Last>::value > >
+  : std::true_type { }; 
+public:
+  static constexpr bool value = impl<
+    std::tuple_element_t<sizeof...(Args),std::tuple<int,Args...>>
+  >::value;
+};
+
 } // end namespace detail
 
 template <typename Bin, typename... Ax, typename Container, typename Filler,
           typename F = bin_converter<Bin> >
 auto* to_root(
   const binner<Bin,std::tuple<Ax...>,Container,Filler>& hist,
-  const std::string& name,
-  F convert = F{}
+  const std::string& name, F convert = F{}
 ) {
   auto *h = make_TH(name.c_str(),hist.axes());
 
@@ -151,47 +189,57 @@ auto* to_root(
   return h;
 };
 
-template <size_t D, typename Bin, typename... Ax, typename... Labels,
-          typename F = bin_converter<Bin> >
-auto* to_root(
+template <size_t D, typename Bin, typename... Ax, typename... Args>
+auto to_root(
   const binner_slice<D, Bin, std::tuple<Ax...>>& hist,
-  const std::string& name,
-  const std::tuple<Labels...>& labels,
-  F convert = F{}
-) {
+  const std::string& name, Args&&... args
+) -> std::enable_if_t<
+  detail::last_is_empty<Args...>::value, detail::TH_t<D>*
+> {
+  auto&& args_tup = std::forward_as_tuple(std::forward<Args>(args)...);
   std::stringstream ss;
   ss.precision(3);
-  ss << name << hist.name(labels);
+  ss << name << hist.name(forward_subtuple(
+    args_tup, std::make_index_sequence<sizeof...(Args)-1>{} ));
+  return to_root(*hist,ss.str(),std::get<sizeof...(Args)-1>(args_tup));
+};
+
+template <size_t D, typename Bin, typename... Ax, typename... Args>
+auto to_root(
+  const binner_slice<D, Bin, std::tuple<Ax...>>& hist,
+  const std::string& name, Args&&... args
+) -> std::enable_if_t<
+  !detail::last_is_empty<Args...>::value, detail::TH_t<D>*
+> {
+  std::stringstream ss;
+  ss.precision(3);
+  ss << name << hist.name(std::forward<Args>(args)...);
   return to_root(*hist,ss.str());
 };
 
 template <size_t D, typename Seq,
           typename Bin, typename... Ax, typename Container, typename Filler,
-          typename... Labels, typename F = bin_converter<Bin> >
+          typename... Args>
 auto slice_to_root(
   const binner_slice<D, Bin, std::tuple<Ax...>>& hist,
-  const std::string& name,
-  const std::tuple<Labels...>& labels,
-  F convert = F{}
+  const std::string& name, Args&&... args
 ) {
-  std::vector<TH1*> hh;
+  std::vector<detail::TH_t<D>*> hh;
   for (const auto& h : slice<D>(hist,Seq{}))
-    hh.push_back( to_root(h,name,labels,convert) );
+    hh.push_back( to_root(h,name,std::forward<Args>(args)...) );
   return hh;
 }
 
 template <size_t D=1,
           typename Bin, typename... Ax, typename Container, typename Filler,
-          typename... Labels, typename F = bin_converter<Bin> >
+          typename... Args>
 auto slice_to_root(
   const binner<Bin,std::tuple<Ax...>,Container,Filler>& hist,
-  const std::string& name,
-  const std::tuple<Labels...>& labels,
-  F convert = F{}
+  const std::string& name, Args&&... args
 ) {
-  std::vector<TH1*> hh;
+  std::vector<detail::TH_t<D>*> hh;
   for (const auto& h : slice<D>(hist))
-    hh.push_back( to_root(h,name,labels,convert) );
+    hh.push_back( to_root(h,name,std::forward<Args>(args)...) );
   return hh;
 }
 

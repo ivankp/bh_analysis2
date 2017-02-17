@@ -142,7 +142,7 @@ private:
   // name proxy struct ----------------------------------------------
   template <typename... L> struct name_proxy {
     static_assert(sizeof...(L) <= tail::size(),
-      "cannot have more labels than dimensions");
+      "\033[33mcannot have more labels than dimensions\033[0m");
     const binner_slice *ptr;
     std::tuple<L...> labels;
 
@@ -188,7 +188,9 @@ public:
   // name proxy factory function ------------------------------------
   template <typename... L>
   inline auto name(L&&... labels) const noexcept
-  -> name_proxy<add_const_to_ref_t<L>...> {
+  -> std::enable_if_t< !pack_is_tuple<L...>::value,
+    name_proxy<add_const_to_ref_t<L>...>
+  > {
     return { this, std::forward_as_tuple(std::forward<L>(labels)...) };
   }
   template <typename... L>

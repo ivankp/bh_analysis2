@@ -198,7 +198,7 @@ auto to_root(
 > {
   auto&& args_tup = std::forward_as_tuple(std::forward<Args>(args)...);
   std::stringstream ss;
-  ss.precision(3);
+  ss.precision(4);
   ss << name << hist.name(forward_subtuple(
     args_tup, std::make_index_sequence<sizeof...(Args)-1>{} ));
   return to_root(*hist,ss.str(),std::get<sizeof...(Args)-1>(args_tup));
@@ -212,7 +212,7 @@ auto to_root(
   !detail::last_is_empty<Args...>::value, detail::TH_t<D>*
 > {
   std::stringstream ss;
-  ss.precision(3);
+  ss.precision(4);
   ss << name << hist.name(std::forward<Args>(args)...);
   return to_root(*hist,ss.str());
 };

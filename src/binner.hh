@@ -255,6 +255,11 @@ public:
     // NOT safe for out of range indices
     return fill_bin(_bins[index(ia)], std::forward<Args>(args)...);
   }
+  template <typename... Args>
+  inline size_type fill_bin_check(size_type bin, Args&&... args) {
+    if (bin == size_type(-1)) return bin;
+    return fill_bin(bin,std::forward<Args>(args)...);
+  }
 
   template <typename... Args>
   inline std::enable_if_t<sizeof...(Args)==naxes,size_type>

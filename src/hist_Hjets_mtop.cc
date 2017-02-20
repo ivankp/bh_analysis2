@@ -28,6 +28,7 @@
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
 #include "re_axes.hh"
+#include "parse_args.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -77,10 +78,11 @@ struct hist_bin {
   double w, w2;
   size_t n;
   hist_bin(): w(0.), w2(0.), n(0) { }
-  inline void operator++() noexcept {
+  inline hist_bin& operator++() noexcept {
     w += weight;
     w2 += weight*weight;
     ++n;
+    return *this;
   }
   inline hist_bin& operator+=(const hist_bin& b) noexcept {
     w += b.w;
@@ -103,17 +105,49 @@ using re_hist = ivanp::binner<hist_bin, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 int main(int argc, char* argv[]) {
-  const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
+  // parse program arguments ========================================
+  std::vector<const char*> input_files_names;
+  const char* output_file_name = nullptr;
+  const char* bins_file = "Hjets_mtop.bins";
+  fj::JetDefinition jet_def;
+  unsigned need_njets = 0;
+
+  for (int i=1; i<argc; ++i) {
+    using namespace parse;
+    if (output_root_file_name(argv[i],output_file_name)) continue;
+    if (root_file_name(argv[i],input_files_names)) continue;
+    if (num_jets(argv[i],need_njets)) continue;
+    if (bins_file_name(argv[i],bins_file)) continue;
+    if (jetdef(argv[i],jet_def)) continue;
+
+    cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
+    return 1;
+  }
+  if (!input_files_names.size()) {
+    cerr << "\033[31mNo input root files provided\033[0m" << endl;
+    return 1;
+  }
+  if (!output_file_name) {
+    cerr << "\033[31mNo output root file provided\033[0m" << endl;
+    return 1;
+  }
+  if (!need_njets) {
+    cerr << "\033[31mNumber of jets is not specified\033[0m" << endl;
+    return 1;
+  }
+  if (jet_def.jet_algorithm() == fj::undefined_jet_algorithm)
+    jet_def = fj::JetDefinition(fj::antikt_algorithm,0.4);
+  // ================================================================
+
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
-  constexpr unsigned need_njets = 2;
 
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
 
-  hist<int> h_Njets({need_njets+2,0,need_njets+2});
+  hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
 
-  re_axes ra("Hjets_mtop.bins");
+  re_axes ra(bins_file);
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
@@ -232,9 +266,9 @@ int main(int argc, char* argv[]) {
 
   // Open input ntuple root file
   TChain chain("t3");
-  for (int i=2; i<argc; ++i) {
-    if (!chain.Add(argv[i],0)) return 1;
-    cout << "\033[36mInput\033[0m: " << argv[i] << endl;
+  for (const char* name : input_files_names) {
+    if (!chain.Add(name,0)) return 1;
+    cout << "\033[36mInput\033[0m: " << name << endl;
   }
   cout << endl;
 
@@ -264,10 +298,13 @@ int main(int argc, char* argv[]) {
   Int_t prev_id = -1, curr_id;
 
   fastjet::ClusterSequence::print_banner(); // get it out of the way
+  cout << jet_def.description() << endl;
+  cout << "Expecting \033[36m" << need_njets
+       << "\033[0m or more jets per event\n" << endl;
 
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
-  for (tc ent(reader.GetEntries(true)); reader.Next() /* && ent < 1 */; ++ent) {
+  for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     hist_bin::weight = *_weight; // Read weight
 
     // Keep track of multi-entry events -----------------------------
@@ -412,29 +449,29 @@ int main(int argc, char* argv[]) {
 
     const auto isp = get_isp(*_id1, *_id2);
     if (isp == gg) {
-      h_gg_xH_HT.fill_bin(xH_HT_bin);
-      h_gg_x1_HT.fill_bin(x1_HT_bin);
-      h_gg_x2_HT.fill_bin(x2_HT_bin);
+      h_gg_xH_HT.fill_bin_check(xH_HT_bin);
+      h_gg_x1_HT.fill_bin_check(x1_HT_bin);
+      h_gg_x2_HT.fill_bin_check(x2_HT_bin);
 
-      h_gg_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_gg_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_gg_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      h_gg_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
+      h_gg_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
+      h_gg_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
     } else if (isp == gq) {
-      h_gq_xH_HT.fill_bin(xH_HT_bin);
-      h_gq_x1_HT.fill_bin(x1_HT_bin);
-      h_gq_x2_HT.fill_bin(x2_HT_bin);
+      h_gq_xH_HT.fill_bin_check(xH_HT_bin);
+      h_gq_x1_HT.fill_bin_check(x1_HT_bin);
+      h_gq_x2_HT.fill_bin_check(x2_HT_bin);
 
-      h_gq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_gq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_gq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      h_gq_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
+      h_gq_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
+      h_gq_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
     } else {
-      h_qq_xH_HT.fill_bin(xH_HT_bin);
-      h_qq_x1_HT.fill_bin(x1_HT_bin);
-      h_qq_x2_HT.fill_bin(x2_HT_bin);
+      h_qq_xH_HT.fill_bin_check(xH_HT_bin);
+      h_qq_x1_HT.fill_bin_check(x1_HT_bin);
+      h_qq_x2_HT.fill_bin_check(x2_HT_bin);
 
-      h_qq_xH_HT_maxdy.fill_bin(xH_HT_maxdy_bin);
-      h_qq_x1_HT_maxdy.fill_bin(x1_HT_maxdy_bin);
-      h_qq_x2_HT_maxdy.fill_bin(x2_HT_maxdy_bin);
+      h_qq_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
+      h_qq_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
+      h_qq_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
     }
 
     // Jet pair with highest pT .....................................
@@ -488,7 +525,7 @@ int main(int argc, char* argv[]) {
   cout << "ncount: " << ncount << endl;
 
   // Open output root file for histograms
-  auto fout = std::make_unique<TFile>(argv[1],"recreate");
+  auto fout = std::make_unique<TFile>(output_file_name,"recreate");
   if (fout->IsZombie()) return 1;
 
   fout->mkdir("weight_JetAntiKt4")->cd();

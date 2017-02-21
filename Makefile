@@ -1,7 +1,16 @@
 STD := -std=c++14
 DF := $(STD) -Isrc
-CF := $(STD) -Wall -Isrc #-O3 -fmax-errors=3 -flto -ffast-math
-LF := $(STD) #-flto
+CF := $(STD) -Wall -Isrc
+LF := $(STD)
+
+ifeq (0, $(words $(findstring $(MAKECMDGOALS), rel)))
+# development mode
+CF += -O2 -fmax-errors=3
+else
+# release mode
+CF += -O3 -flto -funroll-loops -march=native -mfpmath=sse
+LF += -flto
+endif
 
 NPROC := $(shell nproc --all)
 
@@ -37,6 +46,7 @@ NODEPS := clean
 .PHONY: all clean
 
 all: $(EXES)
+rel: $(EXES)
 
 #Don't create dependencies when we're cleaning, for instance
 ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))

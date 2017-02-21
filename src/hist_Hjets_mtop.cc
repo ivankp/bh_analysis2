@@ -74,24 +74,58 @@ isp_t get_isp(Int_t id1, Int_t id2) noexcept {
 }
 
 struct hist_bin {
-  static double weight;
-  double w, w2;
-  size_t n;
-  hist_bin(): w(0.), w2(0.), n(0) { }
+  static std::vector<double> weights;
+  static unsigned wi;
+  struct bin {
+    double w = 0, w2 = 0;
+    size_t n = 0;
+  };
+  std::vector<bin> bins;
+  hist_bin(): bins(weights.size()) { }
+
   inline hist_bin& operator++() noexcept {
-    w += weight;
-    w2 += weight*weight;
-    ++n;
+    for (unsigned i=weights.size(); i!=0; ) {
+      --i;
+      const double weight = weights[i];
+      bin& b = bins[i];
+      b.w += weight;
+      b.w2 += weight*weight;
+      ++b.n;
+    }
     return *this;
   }
-  inline hist_bin& operator+=(const hist_bin& b) noexcept {
-    w += b.w;
-    w2 += b.w2;
-    n += b.n;
+  inline hist_bin& operator+=(const hist_bin& rhs) noexcept {
+    for (unsigned i=weights.size(); i!=0; ) {
+      --i;
+      const bin& br = rhs.bins[i];
+      bin& bl = bins[i];
+      bl.w += br.w;
+      bl.w2 += br.w2;
+      bl.n += br.n;
+    }
     return *this;
   }
 };
-double hist_bin::weight;
+std::vector<double> hist_bin::weights;
+unsigned hist_bin::wi;
+
+namespace ivanp { namespace root {
+template <> class bin_converter<hist_bin> {
+  inline const auto& get(const hist_bin& bin) const noexcept {
+    return bin.bins[hist_bin::wi];
+  }
+public:
+  inline const auto& weight(const hist_bin& b) const noexcept {
+    return get(b).w;
+  }
+  inline const auto&  sumw2(const hist_bin& b) const noexcept {
+    return get(b).w2;
+  }
+  inline const auto&    num(const hist_bin& b) const noexcept {
+    return get(b).n;
+  }
+};
+}}
 
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
@@ -144,6 +178,8 @@ int main(int argc, char* argv[]) {
 
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
+
+  hist_bin::weights.resize(1); // set number of weights
 
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
 
@@ -305,7 +341,7 @@ int main(int argc, char* argv[]) {
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
-    hist_bin::weight = *_weight; // Read weight
+    hist_bin::weights[0] = *_weight; // Read weight
 
     // Keep track of multi-entry events -----------------------------
     curr_id = *_id;
@@ -533,6 +569,8 @@ int main(int argc, char* argv[]) {
   // write root historgrams
   using ivanp::root::to_root;
   using ivanp::root::slice_to_root;
+
+  hist_bin::wi = 0;
 
   to_root(h_Njets,"jets_N_excl");
   h_Njets.integrate_left();

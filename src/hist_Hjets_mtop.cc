@@ -140,24 +140,29 @@ using re_hist = ivanp::binner<hist_bin, std::tuple<
 
 int main(int argc, char* argv[]) {
   // parse program arguments ========================================
-  std::vector<const char*> input_files_names;
+  std::vector<const char*> ntuples, weights;
   const char* output_file_name = nullptr;
   const char* bins_file = "Hjets_mtop.bins";
+  const char* tree_name = "t3";
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;
+  bool w_arg = false;
 
   for (int i=1; i<argc; ++i) {
     using namespace parse;
+    if (!std::strcmp(argv[i],"w")) { w_arg = true; continue; }
+    if (!std::strcmp(argv[i],"bh")) { w_arg = false; continue; }
     if (output_root_file_name(argv[i],output_file_name)) continue;
-    if (root_file_name(argv[i],input_files_names)) continue;
+    if (root_file_name(argv[i], w_arg ? weights : ntuples )) continue;
     if (num_jets(argv[i],need_njets)) continue;
     if (bins_file_name(argv[i],bins_file)) continue;
     if (jetdef(argv[i],jet_def)) continue;
+    if (parse::tree_name(argv[i],tree_name)) continue;
 
     cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
     return 1;
   }
-  if (!input_files_names.size()) {
+  if (!ntuples.size()) {
     cerr << "\033[31mNo input root files provided\033[0m" << endl;
     return 1;
   }
@@ -176,10 +181,61 @@ int main(int argc, char* argv[]) {
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
 
+  // Open input ntuples root file ===================================
+  TChain chain(tree_name);
+  for (const char* name : ntuples) {
+    if (!chain.Add(name,0)) return 1;
+    cout << "\033[36mInput ntuple\033[0m: " << name << endl;
+  }
+  cout << endl;
+
+  boost::optional<TChain> weights_chain;
+  if (weights.size()) {
+    weights_chain.emplace("weights");
+    for (const char* name : weights) {
+      if (!weights_chain->Add(name,0)) return 1;
+      cout << "\033[36mInput weights\033[0m: " << name << endl;
+    }
+    cout << endl;
+  }
+
+  // Set up branches for reading
+  if (weights_chain) chain.AddFriend(&*weights_chain);
+  TTreeReader reader(&chain);
+
+  TTreeReaderValue<Int_t> _id(reader,"id");
+  TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
+  TTreeReaderArray<Int_t> _kf(reader,"kf");
+
+  float_or_double_array_reader _px(reader,"px");
+  float_or_double_array_reader _py(reader,"py");
+  float_or_double_array_reader _pz(reader,"pz");
+  float_or_double_array_reader _E (reader,"E" );
+
+  boost::optional<TTreeReaderValue<Int_t>> _ncount;
+  // boost::optional<TTreeReaderValue<Char_t>> _part;
+  for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
+    if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
+    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
+  }
+  TTreeReaderValue<Int_t> _id1(reader,"id1");
+  TTreeReaderValue<Int_t> _id2(reader,"id2");
+
+  // handle multiple weights
+  // std::vector<TTreeReaderValue<Double_t>> _weights;
+  std::vector<float_or_double_value_reader> _weights;
+  if (!weights_chain) _weights.emplace_back(reader,"weight");
+  else {
+    const TObjArray *bb = weights_chain->GetListOfBranches();
+    _weights.reserve(bb->GetEntriesFast());
+    for (const auto* b : *bb) {
+      _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
+    }
+  }
+  hist_bin::weights.resize(_weights.size());
+
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
-
-  hist_bin::weights.resize(1); // set number of weights
 
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
 
@@ -300,36 +356,6 @@ int main(int argc, char* argv[]) {
 
   // ================================================================
 
-  // Open input ntuple root file
-  TChain chain("t3");
-  for (const char* name : input_files_names) {
-    if (!chain.Add(name,0)) return 1;
-    cout << "\033[36mInput\033[0m: " << name << endl;
-  }
-  cout << endl;
-
-  // Set up branches for reading
-  TTreeReader reader(&chain);
-
-  TTreeReaderValue<Int_t> _id(reader,"id");
-  TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
-  TTreeReaderArray<Int_t> _kf(reader,"kf");
-  TTreeReaderValue<Double_t> _weight(reader,"weight");
-
-  float_or_double_array_reader _px(reader,"px");
-  float_or_double_array_reader _py(reader,"py");
-  float_or_double_array_reader _pz(reader,"pz");
-  float_or_double_array_reader _E (reader,"E" );
-
-  boost::optional<TTreeReaderValue<Int_t>> _ncount;
-  // boost::optional<TTreeReaderValue<Char_t>> _part;
-  for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
-    if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
-    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
-  }
-  TTreeReaderValue<Int_t> _id1(reader,"id1");
-  TTreeReaderValue<Int_t> _id2(reader,"id2");
-
   std::vector<fj::PseudoJet> particles;
   Int_t prev_id = -1, curr_id;
 
@@ -338,10 +364,12 @@ int main(int argc, char* argv[]) {
   cout << "Expecting \033[36m" << need_njets
        << "\033[0m or more jets per event\n" << endl;
 
-  // LOOP ***********************************************************
+  // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
-    hist_bin::weights[0] = *_weight; // Read weight
+    for (unsigned i=_weights.size(); i!=0; ) {
+      --i; hist_bin::weights[i] = *_weights[i];
+    }
 
     // Keep track of multi-entry events -----------------------------
     curr_id = *_id;
@@ -558,78 +586,88 @@ int main(int argc, char* argv[]) {
 
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
-  cout << "ncount: " << ncount << endl;
+  cout << "ncount: " << ncount << '\n' << endl;
 
   // Open output root file for histograms
   auto fout = std::make_unique<TFile>(output_file_name,"recreate");
   if (fout->IsZombie()) return 1;
 
-  fout->mkdir("weight_JetAntiKt4")->cd();
-
   // write root historgrams
-  using ivanp::root::to_root;
-  using ivanp::root::slice_to_root;
-
   hist_bin::wi = 0;
+  for (const auto& _w : _weights) {
+    auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
+        jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
+      : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
+      : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
+      : "", std::setprecision(2), jet_def.R()*10.
+    ).c_str());
+    cout << dir->GetName() << endl;
+    dir->cd();
 
-  to_root(h_Njets,"jets_N_excl");
-  h_Njets.integrate_left();
-  to_root(h_Njets,"jets_N_incl");
+    using ivanp::root::to_root;
+    using ivanp::root::slice_to_root;
 
-  for (auto& h : re_hist<1>::all) to_root(*h,h.name);
+    to_root(h_Njets,"jets_N_excl");
+    h_Njets.integrate_left();
+    to_root(h_Njets,"jets_N_incl");
 
-  slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
-  slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
-  slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
+    for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-  slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
+    slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
+    slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
+    slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
 
-  slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
-  slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
-  slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
+    slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
 
-  slice_to_root<1>(h_xH_HT,"xH","HT");
-  slice_to_root<1>(h_x1_HT,"x1","HT");
-  slice_to_root<1>(h_x2_HT,"x2","HT");
+    slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
+    slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
+    slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
+    slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
+    slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
 
-  slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
-  slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
-  slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
+    slice_to_root<1>(h_xH_HT,"xH","HT");
+    slice_to_root<1>(h_x1_HT,"x1","HT");
+    slice_to_root<1>(h_x2_HT,"x2","HT");
 
-  slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
-  slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
-  slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
+    slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
+    slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
+    slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
 
-  slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
-  slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
-  slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
+    slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
+    slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
+    slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
 
-  slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
-  slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
-  slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
+    slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
+    slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
+    slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
 
-  slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
-  slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
-  slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
+    slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
+    slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
+    slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
 
-  slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
-  slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
-  slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
+    slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
+    slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
+    slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
 
-  slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
-  slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
-  slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
+    slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
+    slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
+    slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
+
+    slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
+    slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
+    slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
+
+    ++hist_bin::wi;
+  }
 
   fout->cd();
   (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
   fout->Write();
-  cout << "\033[32mOutput\033[0m: " << fout->GetName() << endl;
+  cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
 
   return 0;
 }

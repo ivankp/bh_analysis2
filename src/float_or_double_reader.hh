@@ -26,6 +26,12 @@ private:
   inline float_reader_type* f_ptr() noexcept {
     return reinterpret_cast<float_reader_type*>(data);
   }
+  inline const double_reader_type* d_cptr() const noexcept {
+    return reinterpret_cast<const double_reader_type*>(data);
+  }
+  inline const float_reader_type* f_cptr() const noexcept {
+    return reinterpret_cast<const float_reader_type*>(data);
+  }
 
 public:
   float_or_double_value_reader(
@@ -44,6 +50,10 @@ public:
   inline double operator*() noexcept {
     return (is_double ? **d_ptr() : **f_ptr());
   }
+
+  const char* GetBranchName() const noexcept {
+    return (is_double ? d_cptr()->GetBranchName() : f_cptr()->GetBranchName());
+  }
 };
 
 class float_or_double_array_reader {
@@ -60,6 +70,12 @@ private:
   }
   inline float_reader_type* f_ptr() noexcept {
     return reinterpret_cast<float_reader_type*>(data);
+  }
+  inline const double_reader_type* d_cptr() const noexcept {
+    return reinterpret_cast<const double_reader_type*>(data);
+  }
+  inline const float_reader_type* f_cptr() const noexcept {
+    return reinterpret_cast<const float_reader_type*>(data);
   }
 
 public:
@@ -78,6 +94,10 @@ public:
 
   inline double operator[](size_t i) noexcept {
     return (is_double ? (*d_ptr())[i] : (*f_ptr())[i]);
+  }
+
+  const char* GetBranchName() const noexcept {
+    return (is_double ? d_cptr()->GetBranchName() : f_cptr()->GetBranchName());
   }
 };
 

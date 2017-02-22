@@ -50,7 +50,7 @@ bool jetdef(const char* arg,
   }
 
   const JetAlgorithm prev_alg = def.jet_algorithm();
-  def = { alg, std::atof(arg+r) };
+  def = { alg, std::atof(arg+r)*0.1 };
 
   if (prev_alg != undefined_jet_algorithm) {
     std::cout << "\n\033[31mWarning: "

@@ -3,7 +3,7 @@ DF := $(STD) -Isrc
 CF := $(STD) -Wall -Isrc
 LF := $(STD)
 
-ifeq(,${PREFIX})
+ifneq (,${PREFIX})
 PREFIX := ${PREFIX}
 else
 PREFIX := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))

@@ -33,6 +33,8 @@
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
 
+#define STR(S) #S
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -133,7 +135,7 @@ int main(int argc, char* argv[]) {
   // parse program arguments ========================================
   std::vector<const char*> ntuples, weights;
   const char* output_file_name = nullptr;
-  const char* bins_file = "Hjets.bins";
+  const char* bins_file = STR(PREFIX) "/config/Hjets.bins";
   const char* tree_name = "t3";
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;

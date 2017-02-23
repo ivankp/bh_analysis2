@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
   const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
-  constexpr unsigned need_njets = 2;
+  constexpr unsigned need_njets = 1;
 
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
@@ -125,6 +125,8 @@ int main(int argc, char* argv[]) {
     auto name = cat("jet",i+1,"_mass");
     h_jet_mass.emplace_back(name,ra[name]);
   }
+
+  h_(Hj_mass)
 
   // ================================================================
 
@@ -229,6 +231,8 @@ int main(int argc, char* argv[]) {
 
     double H_y = higgs->Rapidity();
     double H_phi = higgs->Phi();
+
+    const auto Hj = *higgs + jets.front().p;
     // --------------------------------------------------------------
 
     ++num_selected;
@@ -250,6 +254,8 @@ int main(int argc, char* argv[]) {
       h_jet_phi [i](jets[i].phi );
       h_jet_mass[i](jets[i].mass);
     }
+
+    h_Hj_mass(Hj.M());
 
     // --------------------------------------------------------------
   } // END EVENT LOOP

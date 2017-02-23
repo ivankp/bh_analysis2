@@ -14,7 +14,9 @@ struct re_axes::store: public
 
 re_axes::re_axes(const std::string& filename): _store(new store) {
 
-  std::fstream f(filename);
+  std::ifstream f(filename);
+  if (!f) throw std::runtime_error("failed to open file: "+filename);
+
   char c; // char buffer
   bool e = false, // expression complete
        l = false, // hit left brace

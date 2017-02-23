@@ -33,6 +33,9 @@
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
 
+#define _STR(S) #S
+#define STR(S) _STR(S)
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -142,7 +145,7 @@ int main(int argc, char* argv[]) {
   // parse program arguments ========================================
   std::vector<const char*> ntuples, weights;
   const char* output_file_name = nullptr;
-  const char* bins_file = "Hjets_mtop.bins";
+  const char* bins_file = STR(PREFIX) "/config/Hjets_mtop.bins";
   const char* tree_name = "t3";
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;
@@ -180,6 +183,9 @@ int main(int argc, char* argv[]) {
 
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
+
+  cout << "\033[36mBinning\033[0m: " << bins_file << '\n' << endl;
+  re_axes ra(bins_file); // read axes
 
   // Open input ntuples root file ===================================
   TChain chain(tree_name);
@@ -222,7 +228,6 @@ int main(int argc, char* argv[]) {
   TTreeReaderValue<Int_t> _id2(reader,"id2");
 
   // handle multiple weights
-  // std::vector<TTreeReaderValue<Double_t>> _weights;
   std::vector<float_or_double_value_reader> _weights;
   if (!weights_chain) _weights.emplace_back(reader,"weight");
   else {
@@ -239,7 +244,6 @@ int main(int argc, char* argv[]) {
 
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
 
-  re_axes ra(bins_file);
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
@@ -354,6 +358,8 @@ int main(int argc, char* argv[]) {
   re_hist<1,1,0>
     h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
 
+  h_(Hjets_mass)
+
   // ================================================================
 
   std::vector<fj::PseudoJet> particles;
@@ -367,10 +373,6 @@ int main(int argc, char* argv[]) {
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
-    for (unsigned i=_weights.size(); i!=0; ) {
-      --i; hist_bin::weights[i] = *_weights[i];
-    }
-
     // Keep track of multi-entry events -----------------------------
     curr_id = *_id;
     if (prev_id!=curr_id) {
@@ -420,6 +422,11 @@ int main(int argc, char* argv[]) {
     if (njets < need_njets) continue; // at least needed number of jets
     // --------------------------------------------------------------
 
+    // Get weights
+    for (unsigned i=_weights.size(); i!=0; ) {
+      --i; hist_bin::weights[i] = *_weights[i];
+    }
+
     // Define variables ---------------------------------------------
     const double H_pT = higgs->Pt();
 
@@ -428,7 +435,11 @@ int main(int argc, char* argv[]) {
     for (const auto& jet : fj_jets) jets.emplace_back(jet);
 
     double HT = H_pT;
-    for (const auto& j : jets) HT += j.pT;
+    TLorentzVector Hjets = *higgs;
+    for (const auto& j : jets) {
+      HT += j.pT;
+      Hjets += j.p;
+    }
 
     double H_y = higgs->Rapidity();
     double H_phi = higgs->Phi();
@@ -475,6 +486,8 @@ int main(int argc, char* argv[]) {
       }
       larger(max_dphi,dphi(jets[i].phi,H_phi));
     }
+
+    h_Hjets_mass(Hjets.M());
 
     if (njets<1) continue; // 111111111111111111111111111111111111111
 
@@ -607,9 +620,10 @@ int main(int argc, char* argv[]) {
     using ivanp::root::to_root;
     using ivanp::root::slice_to_root;
 
-    to_root(h_Njets,"jets_N_excl");
+    auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
     h_Njets.integrate_left();
-    to_root(h_Njets,"jets_N_incl");
+    auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+    h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
@@ -665,7 +679,9 @@ int main(int argc, char* argv[]) {
   }
 
   fout->cd();
-  (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
+  TH1D *h_N = new TH1D("N","N",1,0,1);
+  h_N->SetBinContent(1,ncount);
+  h_N->SetEntries(num_selected);
   fout->Write();
   cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
 

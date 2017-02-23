@@ -33,7 +33,8 @@
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
 
-#define STR(S) #S
+#define _STR(S) #S
+#define STR(S) _STR(S)
 
 using std::cout;
 using std::cerr;
@@ -175,6 +176,7 @@ int main(int argc, char* argv[]) {
   const double jet_eta_cut = 4.4;
 
   cout << "\033[36mBinning\033[0m: " << bins_file << '\n' << endl;
+  re_axes ra(bins_file);
 
   // Open input ntuples root file ===================================
   TChain chain(tree_name);
@@ -231,7 +233,6 @@ int main(int argc, char* argv[]) {
 
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
 
-  re_axes ra(bins_file);
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
@@ -458,9 +459,10 @@ int main(int argc, char* argv[]) {
     using ivanp::root::to_root;
     using ivanp::root::slice_to_root;
 
-    to_root(h_Njets,"jets_N_excl");
+    auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
     h_Njets.integrate_left();
-    to_root(h_Njets,"jets_N_incl");
+    auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+    h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
@@ -468,7 +470,9 @@ int main(int argc, char* argv[]) {
   }
 
   fout->cd();
-  (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
+  TH1D *h_N = new TH1D("N","N",1,0,1);
+  h_N->SetBinContent(1,ncount);
+  h_N->SetEntries(num_selected);
   fout->Write();
   cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
 

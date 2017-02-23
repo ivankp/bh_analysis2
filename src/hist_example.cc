@@ -84,14 +84,14 @@ int main(int argc, char* argv[]) {
   const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
-  constexpr unsigned need_njets = 1;
+  const unsigned need_njets = 2;
 
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
 
   hist<int> h_Njets({need_njets+2,0,need_njets+2});
 
-  re_axes ra("example.bins");
+  re_axes ra("config/example.bins");
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 
@@ -126,8 +126,6 @@ int main(int argc, char* argv[]) {
     h_jet_mass.emplace_back(name,ra[name]);
   }
 
-  h_(Hj_mass)
-
   // ================================================================
 
   // Open input ntuple root file
@@ -157,8 +155,6 @@ int main(int argc, char* argv[]) {
     if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
     // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
   }
-  TTreeReaderValue<Int_t> _id1(reader,"id1");
-  TTreeReaderValue<Int_t> _id2(reader,"id2");
 
   std::vector<fj::PseudoJet> particles;
   Int_t prev_id = -1, curr_id;
@@ -167,9 +163,7 @@ int main(int argc, char* argv[]) {
 
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
-  for (tc ent(reader.GetEntries(true)); reader.Next() /* && ent < 1 */; ++ent) {
-    hist_bin::weight = *_weight; // Read weight
-
+  for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     // Keep track of multi-entry events -----------------------------
     curr_id = *_id;
     if (prev_id!=curr_id) {
@@ -219,6 +213,8 @@ int main(int argc, char* argv[]) {
     if (njets < need_njets) continue; // at least needed number of jets
     // --------------------------------------------------------------
 
+    hist_bin::weight = *_weight; // Read weight
+
     // Define variables ---------------------------------------------
     const double H_pT = higgs->Pt();
 
@@ -231,8 +227,6 @@ int main(int argc, char* argv[]) {
 
     double H_y = higgs->Rapidity();
     double H_phi = higgs->Phi();
-
-    const auto Hj = *higgs + jets.front().p;
     // --------------------------------------------------------------
 
     ++num_selected;
@@ -255,8 +249,6 @@ int main(int argc, char* argv[]) {
       h_jet_mass[i](jets[i].mass);
     }
 
-    h_Hj_mass(Hj.M());
-
     // --------------------------------------------------------------
   } // END EVENT LOOP
   // ****************************************************************
@@ -275,14 +267,17 @@ int main(int argc, char* argv[]) {
   using ivanp::root::to_root;
   using ivanp::root::slice_to_root;
 
-  to_root(h_Njets,"jets_N_excl");
+  auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
   h_Njets.integrate_left();
-  to_root(h_Njets,"jets_N_incl");
+  auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+  h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
   for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
   fout->cd();
-  (new TH1D("N","N",1,0,1))->SetBinContent(1,ncount);
+  TH1D *h_N = new TH1D("N","N",1,0,1);
+  h_N->SetBinContent(1,ncount);
+  h_N->SetEntries(num_selected);
   fout->Write();
   cout << "\033[32mOutput\033[0m: " << fout->GetName() << endl;
 

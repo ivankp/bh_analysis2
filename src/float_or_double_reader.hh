@@ -3,6 +3,8 @@
 
 #include <TLeaf.h>
 
+#include "exception.hh"
+
 bool branch_is_double(TTree* t, const char* branchname) {
   const char *branchtype = t->GetLeaf(branchname)->GetTypeName();
   if (!strcmp(branchtype,"Double_t")) return true;
@@ -26,10 +28,10 @@ private:
   inline float_reader_type* f_ptr() noexcept {
     return reinterpret_cast<float_reader_type*>(data);
   }
-  inline const double_reader_type* d_cptr() const noexcept {
+  inline const double_reader_type* d_ptr() const noexcept {
     return reinterpret_cast<const double_reader_type*>(data);
   }
-  inline const float_reader_type* f_cptr() const noexcept {
+  inline const float_reader_type* f_ptr() const noexcept {
     return reinterpret_cast<const float_reader_type*>(data);
   }
 
@@ -52,7 +54,7 @@ public:
   }
 
   const char* GetBranchName() const noexcept {
-    return (is_double ? d_cptr()->GetBranchName() : f_cptr()->GetBranchName());
+    return (is_double ? d_ptr()->GetBranchName() : f_ptr()->GetBranchName());
   }
 };
 
@@ -71,10 +73,10 @@ private:
   inline float_reader_type* f_ptr() noexcept {
     return reinterpret_cast<float_reader_type*>(data);
   }
-  inline const double_reader_type* d_cptr() const noexcept {
+  inline const double_reader_type* d_ptr() const noexcept {
     return reinterpret_cast<const double_reader_type*>(data);
   }
-  inline const float_reader_type* f_cptr() const noexcept {
+  inline const float_reader_type* f_ptr() const noexcept {
     return reinterpret_cast<const float_reader_type*>(data);
   }
 
@@ -97,7 +99,7 @@ public:
   }
 
   const char* GetBranchName() const noexcept {
-    return (is_double ? d_cptr()->GetBranchName() : f_cptr()->GetBranchName());
+    return (is_double ? d_ptr()->GetBranchName() : f_ptr()->GetBranchName());
   }
 };
 

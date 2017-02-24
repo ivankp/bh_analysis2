@@ -38,6 +38,9 @@ L_hist_Hjets_mtop := $(L_hist_Hjets)
 C_hist_example := $(C_hist_Hjets)
 L_hist_example := $(L_hist_Hjets)
 
+C_njets_test := $(C_hist_Hjets)
+L_njets_test := $(L_hist_Hjets)
+
 SRC := src
 BIN := bin
 BLD := .build

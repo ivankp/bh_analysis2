@@ -164,6 +164,8 @@ int main(int argc, char* argv[]) {
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
+    hist_bin::weight = *_weight; // Read weight
+
     // Keep track of multi-entry events -----------------------------
     curr_id = *_id;
     if (prev_id!=curr_id) {
@@ -212,8 +214,6 @@ int main(int argc, char* argv[]) {
     // Apply event cuts ---------------------------------------------
     if (njets < need_njets) continue; // at least needed number of jets
     // --------------------------------------------------------------
-
-    hist_bin::weight = *_weight; // Read weight
 
     // Define variables ---------------------------------------------
     const double H_pT = higgs->Pt();

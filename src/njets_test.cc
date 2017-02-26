@@ -21,6 +21,9 @@
 #include "timed_counter.hh"
 #include "float_or_double_reader.hh"
 
+#define test(var) \
+  std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -45,49 +48,71 @@ int main(int argc, char* argv[]) {
   
   float_or_double_value_reader _weight(reader, "weight");
 
-  std::array<double,7> npar{}, njets{}, njets_30{},
-                       epar{}, ejets{}, ejets_30{};
-  std::vector<std::array<double,4>> jets;
+  std::array<double,7> npar{}, npar_30{}, njets{},
+                       epar{}, epar_30{}, ejets{};
+
+  const fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
+  fastjet::ClusterSequence::print_banner(); // get it out of the way
+  cout << jet_def.description() << endl;
+  std::vector<fj::PseudoJet> particles;
 
   // LOOP ***********************************************************
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     const double weight = *_weight; // Read weight
 
-    const int np = *_nparticle;
     // Read particles -----------------------------------------------
-    jets.clear();
-    for (int i=0; i<np; ++i)
+    particles.clear();
+    particles.reserve(*_nparticle);
+    for (size_t i=0, n=_kf.GetSize(); i<n; ++i)
       if (_kf[i] != 25)
-        jets.push_back({_px[i],_py[i],_pz[i],_E[i]});
+        particles.emplace_back(_px[i],_py[i],_pz[i],_E[i]);
     // --------------------------------------------------------------
+    const size_t np = particles.size();
 
     npar[np] += weight;
     ++epar[np];
-    njets[jets.size()] += weight;
-    ++ejets[jets.size()];
     
-    int nj_30 = 0;
-    for (const auto& j : jets)
-      if ( std::sqrt(sq(j[0],j[1])) > 30. ) ++nj_30;
-    njets_30[nj_30] += weight;
-    ++ejets_30[nj_30];
+    int np_30 = 0;
+    for (const auto& p : particles)
+      if ( p.pt() > 30. ) ++np_30;
+    npar_30[np_30] += weight;
+    ++epar_30[np_30];
 
+    // Cluster jets -------------------------------------------------
+    auto fj_jets = fj::ClusterSequence(particles,jet_def) // cluster
+      .inclusive_jets(30.); // apply pT cut
+    // apply eta cut
+    for (auto it=fj_jets.begin(); it!=fj_jets.end(); ) {
+      if (abs(it->eta()) > 4.4) fj_jets.erase(it);
+      else ++it;
+    }
+    // sort by pT
+    std::sort( fj_jets.begin(), fj_jets.end(),
+      [](const fj::PseudoJet& a, const fj::PseudoJet& b){
+        return ( a.pt() > b.pt() );
+      });
+    // resulting number of jets
+    const unsigned nj = fj_jets.size();
+    // --------------------------------------------------------------
+
+    njets[nj] += weight;
+    ++ejets[nj];
   }
 
   cout.precision(3);
   for (unsigned i=0; i<njets.size(); ++i) {
     cout << i << ": "
          << setw(10) << epar[i] << ' '
-         << setw(10) << ejets[i] << " "
-         << setw(10) << ejets_30[i] << endl;
+         << setw(10) << epar_30[i] << " "
+         << setw(10) << ejets[i] << endl;
   }
   cout << endl;
   for (unsigned i=0; i<njets.size(); ++i) {
     cout << i << ": "
          << setw(10) << npar[i] << ' '
-         << setw(10) << njets[i] << " "
-         << setw(10) << njets_30[i] << endl;
+         << setw(10) << npar_30[i] << " "
+         << setw(10) << njets[i] << endl;
   }
 
   return 0;

@@ -70,8 +70,10 @@ struct dijet {
 struct hist_bin {
   static std::vector<double> weights;
   static unsigned wi;
+  static int current_id;
   struct bin {
-    double w = 0, w2 = 0;
+    int id = 0;
+    double wtmp = 0, w = 0, w2 = 0;
     size_t n = 0;
   };
   std::vector<bin> bins;
@@ -82,8 +84,13 @@ struct hist_bin {
       --i;
       const double weight = weights[i];
       bin& b = bins[i];
+      if (b.id == current_id) b.wtmp += weight;
+      else {
+        b.id = current_id;
+        b.w2 += b.wtmp*b.wtmp;
+        b.wtmp = weight;
+      }
       b.w += weight;
-      b.w2 += weight*weight;
       ++b.n;
     }
     return *this;
@@ -94,6 +101,7 @@ struct hist_bin {
       const bin& br = rhs.bins[i];
       bin& bl = bins[i];
       bl.w += br.w;
+      bl.wtmp += br.wtmp;
       bl.w2 += br.w2;
       bl.n += br.n;
     }
@@ -102,6 +110,7 @@ struct hist_bin {
 };
 std::vector<double> hist_bin::weights;
 unsigned hist_bin::wi;
+int hist_bin::current_id;
 
 namespace ivanp { namespace root {
 template <> class bin_converter<hist_bin> {
@@ -109,13 +118,14 @@ template <> class bin_converter<hist_bin> {
     return bin.bins[hist_bin::wi];
   }
 public:
-  inline const auto& weight(const hist_bin& b) const noexcept {
+  inline auto weight(const hist_bin& b) const noexcept {
     return get(b).w;
   }
-  inline const auto&  sumw2(const hist_bin& b) const noexcept {
-    return get(b).w2;
+  inline auto sumw2(const hist_bin& b) const noexcept {
+    auto _b = get(b);
+    return _b.w2 + sq(_b.wtmp);
   }
-  inline const auto&    num(const hist_bin& b) const noexcept {
+  inline auto num(const hist_bin& b) const noexcept {
     return get(b).n;
   }
 };
@@ -180,18 +190,20 @@ int main(int argc, char* argv[]) {
 
   // Open input ntuples root file ===================================
   TChain chain(tree_name);
+  cout << "\033[36mInput ntuples\033[0m:" << endl;
   for (const char* name : ntuples) {
     if (!chain.Add(name,0)) return 1;
-    cout << "\033[36mInput ntuple\033[0m: " << name << endl;
+    cout << "  " << name << endl;
   }
   cout << endl;
 
   boost::optional<TChain> weights_chain;
   if (weights.size()) {
+    cout << "\n\033[36mInput weights\033[0m:" << endl;
     weights_chain.emplace("weights");
     for (const char* name : weights) {
       if (!weights_chain->Add(name,0)) return 1;
-      cout << "\033[36mInput weights\033[0m: " << name << endl;
+      cout << "  " << name << endl;
     }
     cout << endl;
   }
@@ -278,7 +290,7 @@ int main(int argc, char* argv[]) {
   // ================================================================
 
   std::vector<fj::PseudoJet> particles;
-  Int_t prev_id = -1, curr_id;
+  Int_t prev_id = -1;
 
   fastjet::ClusterSequence::print_banner(); // get it out of the way
   cout << jet_def.description() << endl;
@@ -293,9 +305,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Keep track of multi-entry events -----------------------------
-    curr_id = *_id;
-    if (prev_id!=curr_id) {
-      prev_id = curr_id;
+    hist_bin::current_id = *_id;
+    if (prev_id != hist_bin::current_id) {
+      prev_id = hist_bin::current_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }

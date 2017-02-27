@@ -27,6 +27,9 @@ inline void smaller(T1& x, const T2& y) noexcept { if (y < x) x = y; }
 template <typename T1, typename T2>
 inline void larger (T1& x, const T2& y) noexcept { if (x < y) x = y; }
 
+[[ gnu::const ]]
+constexpr size_t nut(size_t n) noexcept { return n*(n+1)/2; }
+
 }}
 
 #endif

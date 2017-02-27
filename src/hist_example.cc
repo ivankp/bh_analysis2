@@ -87,8 +87,6 @@ int main(int argc, char* argv[]) {
   const unsigned need_njets = 2;
 
   // Define histograms ==============================================
-  size_t ncount = 0, num_events = 0, num_selected = 0;
-
   hist<int> h_Njets({need_njets+2,0,need_njets+2});
 
   re_axes ra("config/example.bins");
@@ -161,7 +159,9 @@ int main(int argc, char* argv[]) {
 
   fastjet::ClusterSequence::print_banner(); // get it out of the way
 
-  // LOOP ***********************************************************
+  size_t ncount = 0, num_events = 0, num_selected = 0;
+
+  // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     hist_bin::weight = *_weight; // Read weight
@@ -175,12 +175,13 @@ int main(int argc, char* argv[]) {
     }
     // --------------------------------------------------------------
 
+    const size_t np = *_nparticle;
     particles.clear();
-    particles.reserve(*_nparticle);
+    particles.reserve(np);
     boost::optional<TLorentzVector> higgs;
 
     // Read particles -----------------------------------------------
-    for (size_t i=0, n=_kf.GetSize(); i<n; ++i) {
+    for (size_t i=0; i<np; ++i) {
       if (_kf[i] == 25) {
         higgs.emplace(_px[i],_py[i],_pz[i],_E[i]);
       } else {
@@ -248,10 +249,10 @@ int main(int argc, char* argv[]) {
       h_jet_phi [i](jets[i].phi );
       h_jet_mass[i](jets[i].mass);
     }
-
     // --------------------------------------------------------------
+
   } // END EVENT LOOP
-  // ****************************************************************
+  // ================================================================
 
   cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;

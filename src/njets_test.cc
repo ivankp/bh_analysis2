@@ -71,7 +71,7 @@ using hist = ivanp::binner<hist_bin, std::tuple<
 
 int main(int argc, char* argv[]) {
   if (argc != 4) {
-    cout << "usage: " << argv[0] << "jetdef in.root out.root" << endl;
+    cout << "usage: " << argv[0] << " jetdef in.root out.root" << endl;
     return 0;
   }
 

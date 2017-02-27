@@ -100,8 +100,8 @@ struct hist_bin {
       --i;
       const bin& br = rhs.bins[i];
       bin& bl = bins[i];
-      bl.w += br.w;
       bl.wtmp += br.wtmp;
+      bl.w += br.w;
       bl.w2 += br.w2;
       bl.n += br.n;
     }

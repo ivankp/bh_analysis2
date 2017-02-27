@@ -77,58 +77,34 @@ isp_t get_isp(Int_t id1, Int_t id2) noexcept {
 }
 
 struct hist_bin {
-  static std::vector<double> weights;
-  static unsigned wi;
-  struct bin {
-    double w = 0, w2 = 0;
-    size_t n = 0;
-  };
-  std::vector<bin> bins;
-  hist_bin(): bins(weights.size()) { }
+  static double weight;
+  static int current_id;
+
+  int id = 0;
+  double wtmp = 0, w = 0, w2 = 0;
+  size_t n = 0;
 
   inline hist_bin& operator++() noexcept {
-    for (unsigned i=weights.size(); i!=0; ) {
-      --i;
-      const double weight = weights[i];
-      bin& b = bins[i];
-      b.w += weight;
-      b.w2 += weight*weight;
-      ++b.n;
+    if (id == current_id) wtmp += weight;
+    else {
+      id = current_id;
+      w2 += wtmp*wtmp;
+      wtmp = weight;
     }
+    w += weight;
+    ++n;
     return *this;
   }
-  inline hist_bin& operator+=(const hist_bin& rhs) noexcept {
-    for (unsigned i=weights.size(); i!=0; ) {
-      --i;
-      const bin& br = rhs.bins[i];
-      bin& bl = bins[i];
-      bl.w += br.w;
-      bl.w2 += br.w2;
-      bl.n += br.n;
-    }
+  inline hist_bin& operator+=(const hist_bin& b) noexcept {
+    wtmp += b.wtmp;
+    w += b.w;
+    w2 += b.w2;
+    n += b.n;
     return *this;
   }
 };
-std::vector<double> hist_bin::weights;
-unsigned hist_bin::wi;
-
-namespace ivanp { namespace root {
-template <> class bin_converter<hist_bin> {
-  inline const auto& get(const hist_bin& bin) const noexcept {
-    return bin.bins[hist_bin::wi];
-  }
-public:
-  inline const auto& weight(const hist_bin& b) const noexcept {
-    return get(b).w;
-  }
-  inline const auto&  sumw2(const hist_bin& b) const noexcept {
-    return get(b).w2;
-  }
-  inline const auto&    num(const hist_bin& b) const noexcept {
-    return get(b).n;
-  }
-};
-}}
+double hist_bin::weight;
+int hist_bin::current_id;
 
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
@@ -189,29 +165,20 @@ int main(int argc, char* argv[]) {
 
   // Open input ntuples root file ===================================
   TChain chain(tree_name);
+  cout << "\033[36mInput ntuples\033[0m:" << endl;
   for (const char* name : ntuples) {
     if (!chain.Add(name,0)) return 1;
-    cout << "\033[36mInput ntuple\033[0m: " << name << endl;
+    cout << "  " << name << endl;
   }
   cout << endl;
 
-  boost::optional<TChain> weights_chain;
-  if (weights.size()) {
-    weights_chain.emplace("weights");
-    for (const char* name : weights) {
-      if (!weights_chain->Add(name,0)) return 1;
-      cout << "\033[36mInput weights\033[0m: " << name << endl;
-    }
-    cout << endl;
-  }
-
   // Set up branches for reading
-  if (weights_chain) chain.AddFriend(&*weights_chain);
   TTreeReader reader(&chain);
 
   TTreeReaderValue<Int_t> _id(reader,"id");
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
+  TTreeReaderValue<Double_t> _weight(reader,"weight");
 
   float_or_double_array_reader _px(reader,"px");
   float_or_double_array_reader _py(reader,"py");
@@ -219,25 +186,11 @@ int main(int argc, char* argv[]) {
   float_or_double_array_reader _E (reader,"E" );
 
   boost::optional<TTreeReaderValue<Int_t>> _ncount;
-  // boost::optional<TTreeReaderValue<Char_t>> _part;
   for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
     if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
-    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
   }
   TTreeReaderValue<Int_t> _id1(reader,"id1");
   TTreeReaderValue<Int_t> _id2(reader,"id2");
-
-  // handle multiple weights
-  std::vector<float_or_double_value_reader> _weights;
-  if (!weights_chain) _weights.emplace_back(reader,"weight");
-  else {
-    const TObjArray *bb = weights_chain->GetListOfBranches();
-    _weights.reserve(bb->GetEntriesFast());
-    for (const auto* b : *bb) {
-      _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
-    }
-  }
-  hist_bin::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   size_t ncount = 0, num_events = 0, num_selected = 0;
@@ -363,7 +316,7 @@ int main(int argc, char* argv[]) {
   // ================================================================
 
   std::vector<fj::PseudoJet> particles;
-  Int_t prev_id = -1, curr_id;
+  Int_t prev_id = -1;
 
   fastjet::ClusterSequence::print_banner(); // get it out of the way
   cout << jet_def.description() << endl;
@@ -373,14 +326,12 @@ int main(int argc, char* argv[]) {
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
-    for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; hist_bin::weights[i] = *_weights[i];
-    }
+    hist_bin::weight = *_weight; // Read weight
 
     // Keep track of multi-entry events -----------------------------
-    curr_id = *_id;
-    if (prev_id!=curr_id) {
-      prev_id = curr_id;
+    hist_bin::current_id = *_id;
+    if (prev_id != hist_bin::current_id) {
+      prev_id = hist_bin::current_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
@@ -605,77 +556,72 @@ int main(int argc, char* argv[]) {
   if (fout->IsZombie()) return 1;
 
   // write root historgrams
-  hist_bin::wi = 0;
-  for (const auto& _w : _weights) {
-    auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
-        jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
-      : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
-      : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
-      : "", std::setprecision(2), jet_def.R()*10.
-    ).c_str());
-    cout << dir->GetName() << endl;
-    dir->cd();
+  auto* dir = fout->mkdir(cat(_weight.GetBranchName(),"_Jet",
+      jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
+    : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
+    : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
+    : "", std::setprecision(2), jet_def.R()*10.
+  ).c_str());
+  cout << dir->GetName() << endl;
+  dir->cd();
 
-    using ivanp::root::to_root;
-    using ivanp::root::slice_to_root;
+  using ivanp::root::to_root;
+  using ivanp::root::slice_to_root;
 
-    auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
-    h_Njets.integrate_left();
-    auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
-    h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
+  auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
+  h_Njets.integrate_left();
+  auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+  h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
-    for (auto& h : re_hist<1>::all) to_root(*h,h.name);
+  for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-    slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
-    slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
-    slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
+  slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
+  slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
+  slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
 
-    slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
+  slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
 
-    slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
-    slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
-    slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
-    slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
-    slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
-    slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
-    slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
-    slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
-    slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
+  slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
+  slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
+  slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
+  slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
+  slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
+  slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
+  slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
+  slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
+  slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
 
-    slice_to_root<1>(h_xH_HT,"xH","HT");
-    slice_to_root<1>(h_x1_HT,"x1","HT");
-    slice_to_root<1>(h_x2_HT,"x2","HT");
+  slice_to_root<1>(h_xH_HT,"xH","HT");
+  slice_to_root<1>(h_x1_HT,"x1","HT");
+  slice_to_root<1>(h_x2_HT,"x2","HT");
 
-    slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
-    slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
-    slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
+  slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
+  slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
+  slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
 
-    slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
-    slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
-    slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
+  slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
+  slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
+  slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
 
-    slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
-    slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
-    slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
+  slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
+  slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
+  slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
 
-    slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
-    slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
-    slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
+  slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
+  slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
+  slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
 
-    slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
-    slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
-    slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
+  slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
+  slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
+  slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
 
-    slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
-    slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
-    slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
+  slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
+  slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
+  slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
 
-    slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
-    slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
-    slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
-
-    ++hist_bin::wi;
-  }
+  slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
+  slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
+  slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
 
   fout->cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);

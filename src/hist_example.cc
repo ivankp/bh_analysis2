@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
       .inclusive_jets(jet_pt_cut); // apply pT cut
     // apply eta cut
     for (auto it=fj_jets.begin(); it!=fj_jets.end(); ) {
-      if (abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
+      if (std::abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
       else ++it;
     }
     // sort by pT

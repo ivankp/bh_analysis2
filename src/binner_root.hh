@@ -130,22 +130,22 @@ public:
   static constexpr bool has_num    = _has_num   <F>::value;
 };
 
-template <bool Use, typename Bins, typename F>
+template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<!Use> set_weight(TH1* h, const Bins& bins, F get) { }
-template <bool Use, typename Bins, typename F>
+template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<Use> set_weight(TH1* h, const Bins& bins, F get) {
   Double_t *weight = dynamic_cast<TArrayD*>(h)->GetArray();
-  size_t i = 0;
+  size_t i = !Uf;
   for (const auto& bin : bins) weight[i] = get.weight(bin), ++i;
 }
 
-template <bool Use, typename Bins, typename F>
+template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<!Use> set_sumw2(TH1* h, const Bins& bins, F get) { }
-template <bool Use, typename Bins, typename F>
+template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<Use> set_sumw2(TH1* h, const Bins& bins, F get) {
   h->Sumw2();
   Double_t *sumw2 = h->GetSumw2()->GetArray();
-  size_t i = 0;
+  size_t i = !Uf;
   for (const auto& bin : bins) sumw2[i] = get.sumw2(bin), ++i;
 }
 
@@ -181,10 +181,11 @@ auto* to_root(
   auto *h = make_TH(name.c_str(),hist.axes());
 
   using traits = detail::bin_converter_traits<F,Bin>;
+  using under  = typename std::tuple_element_t<0,std::tuple<Ax...>>::under;
 
-  detail::set_weight<traits::has_weight>(h, hist.bins(), convert);
-  detail::set_sumw2 <traits::has_sumw2 >(h, hist.bins(), convert);
-  detail::set_num   <traits::has_num   >(h, hist.bins(), convert);
+  detail::set_weight<traits::has_weight,under::value>(h, hist.bins(), convert);
+  detail::set_sumw2 <traits::has_sumw2, under::value>(h, hist.bins(), convert);
+  detail::set_num   <traits::has_num>(h, hist.bins(), convert);
 
   return h;
 };

@@ -333,7 +333,7 @@ int main(int argc, char* argv[]) {
       .inclusive_jets(jet_pt_cut); // apply pT cut
     // apply eta cut
     for (auto it=fj_jets.begin(); it!=fj_jets.end(); ) {
-      if (abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
+      if (std::abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
       else ++it;
     }
     // sort by pT
@@ -392,12 +392,12 @@ int main(int argc, char* argv[]) {
     }
 
     // find maximum rapidity separation in the event
-    double max_dy = abs(jets[0].y-H_y);
+    double max_dy = std::abs(jets[0].y-H_y);
     for (unsigned i=1; i<njets; ++i) {
       for (unsigned j=0; j<i; ++j) {
-        larger(max_dy,abs(jets[i].y-jets[j].y));
+        larger(max_dy,std::abs(jets[i].y-jets[j].y));
       }
-      larger(max_dy,abs(jets[i].y-H_y));
+      larger(max_dy,std::abs(jets[i].y-H_y));
     }
 
     // find maximum phi separation in the event

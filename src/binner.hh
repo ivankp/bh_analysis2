@@ -302,6 +302,19 @@ template <typename B, typename... A, typename C, typename F>
 std::vector<typename binner<B,std::tuple<A...>,C,F>::named_ptr_type>
 binner<B,std::tuple<A...>,C,F>::all;
 
+// ##################################################################
+
+// Metafunctions
+
+template <typename Binner, typename... AxesSpecs> struct add_axes;
+template <typename Bin, typename... Ax, typename Container, typename Filler,
+          typename... AxesSpecs>
+struct add_axes<binner<Bin,std::tuple<Ax...>,Container,Filler>,AxesSpecs...> {
+  using type = binner<Bin,std::tuple<Ax...,AxesSpecs...>,Container,Filler>;
+};
+template <typename Binner, typename... AxesSpecs>
+using add_axes_t = typename add_axes<Binner,AxesSpecs...>::type;
+
 } // end namespace ivanp
 
 #endif

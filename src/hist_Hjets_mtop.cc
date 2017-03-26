@@ -71,7 +71,7 @@ struct dijet {
     mass(p.M()) {}
 };
 
-enum isp_t { gg, gq, qq };
+enum isp_t { any_isp=0, gg, gq, qq };
 isp_t get_isp(Int_t id1, Int_t id2) noexcept {
   bool g1 = (id1 == 21);
   bool g2 = (id2 == 21);
@@ -301,29 +301,19 @@ int main(int argc, char* argv[]) {
   // histograms for mtop study
   a_(_x) a_(_HT) a_(_maxdy) a_(_pT) a_(_x2)
 
-  auto h_x_HT = reserve<re_hist<1,0>>(njmax+1);
-  for (unsigned i=0; i<=njmax; ++i) {
-    h_x_HT.emplace_back(cat('x',(i ? char('0'+i) : 'H'),"_HT"), a__x, a__HT);
+  std::array<std::vector<re_hist<1,0>>,4> h_x_HT;
+  for (int isp=0; isp<4; ++isp) {
+    static char name[] = "ii_xj_HT";
+    name[0] = (isp < qq ? 'g' : 'q');
+    name[1] = (isp < gq ? 'g' : 'q');
+    h_x_HT[isp].reserve(njmax+1);
+    for (unsigned j=0; j<=njmax; ++j) {
+      name[4] = (j ? char('0'+j) : 'H');
+      h_x_HT[isp].emplace_back(isp ? name : name+3, a__x, a__HT);
+    }
   }
 
 /*
-  re_hist<1,0>
-    h_xH_HT(a__x, a__HT),
-    h_x1_HT(a__x, a__HT),
-    h_x2_HT(a__x, a__HT),
-
-    h_gg_xH_HT(a__x, a__HT),
-    h_gg_x1_HT(a__x, a__HT),
-    h_gg_x2_HT(a__x, a__HT),
-
-    h_gq_xH_HT(a__x, a__HT),
-    h_gq_x1_HT(a__x, a__HT),
-    h_gq_x2_HT(a__x, a__HT),
-
-    h_qq_xH_HT(a__x, a__HT),
-    h_qq_x1_HT(a__x, a__HT),
-    h_qq_x2_HT(a__x, a__HT);
-
   re_hist<1,0,0>
     h_xH_HT_maxdy(a__x, a__HT, a__maxdy),
     h_x1_HT_maxdy(a__x, a__HT, a__maxdy),
@@ -497,11 +487,15 @@ int main(int argc, char* argv[]) {
     }
     // ..............................................................
 
+    const auto isp = get_isp(*_id1, *_id2);
+
     // HT fractions .................................................
-    std::vector<double> frac_HT(njmax+1);
-    h_x_HT[0]( frac_HT[0] = H_pT/HT, HT );
+    static std::vector<double> frac_HT(njmax+1);
+    auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT );
+    if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
     for (unsigned i=njmax; i!=0; --i) {
-      h_x_HT[i]( frac_HT[i] = jets[i-1].pT / HT, HT );
+      x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT );
+      if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
     }
     // ..............................................................
 

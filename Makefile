@@ -11,7 +11,7 @@ endif
 
 ifeq (0, $(words $(findstring $(MAKECMDGOALS), rel)))
 # development mode
-CF += -O2 -fmax-errors=3
+CF += -O2 -g -fmax-errors=3
 else
 # release mode
 CF += -O3 -flto -funroll-loops -march=native -mfpmath=sse

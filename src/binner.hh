@@ -184,19 +184,29 @@ public:
 
   binner(const binner& o): _axes(o._axes), _bins(o._bins) { }
   binner(binner&& o): _axes(std::move(o._axes)), _bins(std::move(o._bins)) { }
-  binner& operator=(const binner& o) {
-    _axes = o._axes;
-    _bins = o._bins;
+  binner& operator=(const binner& rhs) {
+    _axes = rhs._axes;
+    _bins = rhs._bins;
     return *this;
   }
-  binner& operator=(binner&& o) {
-    _axes = std::move(o._axes);
-    _bins = std::move(o._bins);
+  binner& operator=(binner&& rhs) {
+    _axes = std::move(rhs._axes);
+    _bins = std::move(rhs._bins);
     return *this;
   }
   binner(const std::string& name, const binner& o)
   : _axes(o._axes), _bins(o._bins) {
     all.emplace_back(this,name);
+  }
+
+  binner& operator+=(const binner& rhs) {
+    if (nbins_total() != rhs.nbins_total()) throw std::length_error(
+      "binner::operator+=: nbins_total does not match");
+    for (size_type i=nbins_total(); i!=0;) {
+      --i;
+      _bins[i] += rhs._bins[i];
+    }
+    return *this;
   }
 
   template <unsigned I=0>

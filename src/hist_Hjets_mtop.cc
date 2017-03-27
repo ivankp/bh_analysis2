@@ -29,6 +29,7 @@
 #include "binner_root.hh"
 #include "re_axes.hh"
 #include "parse_args.hh"
+#include "string_alg.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -301,36 +302,22 @@ int main(int argc, char* argv[]) {
   // histograms for mtop study
   a_(_x) a_(_HT) a_(_maxdy) a_(_pT) a_(_x2)
 
-  std::array<std::vector<re_hist<1,0>>,4> h_x_HT;
-  for (int isp=0; isp<4; ++isp) {
-    static char name[] = "ii_xj_HT";
+  using h_x_HT_maxdy_type = ivanp::add_axes_t< re_hist<1,0>,
+    ivanp::axis_spec<re_axis,false,true> >;
+
+  std::array<std::vector<h_x_HT_maxdy_type>,4> h_x_HT;
+  for (int isp=0; isp<4; ++isp) { // any, gg, gq, qq
+    static char name[] = "ii_xj_HT_maxdy";
     name[0] = (isp < qq ? 'g' : 'q');
     name[1] = (isp < gq ? 'g' : 'q');
-    h_x_HT[isp].reserve(njmax+1);
+    h_x_HT[isp].reserve(njmax+1); // +1 for Higgs
     for (unsigned j=0; j<=njmax; ++j) {
       name[4] = (j ? char('0'+j) : 'H');
-      h_x_HT[isp].emplace_back(isp ? name : name+3, a__x, a__HT);
+      h_x_HT[isp].emplace_back(isp ? name : name+3, a__x, a__HT, a__maxdy);
     }
   }
 
 /*
-  re_hist<1,0,0>
-    h_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_x2_HT_maxdy(a__x, a__HT, a__maxdy),
-
-    h_gg_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gg_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gg_x2_HT_maxdy(a__x, a__HT, a__maxdy),
-
-    h_gq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_gq_x2_HT_maxdy(a__x, a__HT, a__maxdy),
-
-    h_qq_xH_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_qq_x1_HT_maxdy(a__x, a__HT, a__maxdy),
-    h_qq_x2_HT_maxdy(a__x, a__HT, a__maxdy);
-
   // p1's pT in bins of p2's x
   std::array<std::array< re_hist<1,0>, 3>,3> h_p1pT_p2x;
   for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
@@ -341,12 +328,12 @@ int main(int argc, char* argv[]) {
     h_xH_x1_HT(a__x3,a__x3,a__HT),
     h_xH_x2_HT(a__x3,a__x3,a__HT),
     h_x1_x2_HT(a__x3,a__x3,a__HT);
+*/
 
   // maxdy vs maxdphi in bins of HT
   a_(_maxdy2) a_(_maxdphi2)
   re_hist<1,1,0>
     h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
-*/
 
   // ================================================================
 
@@ -487,14 +474,16 @@ int main(int argc, char* argv[]) {
     }
     // ..............................................................
 
+    h_maxdy_maxdphi_HT(max_dy,max_dphi,HT);
+
     const auto isp = get_isp(*_id1, *_id2);
 
     // HT fractions .................................................
     static std::vector<double> frac_HT(njmax+1);
-    auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT );
+    auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT, max_dy );
     if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
     for (unsigned i=njmax; i!=0; --i) {
-      x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT );
+      x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT, max_dy );
       if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
     }
     // ..............................................................
@@ -649,12 +638,17 @@ int main(int argc, char* argv[]) {
     slice_to_root(*h,name,var);
   }
 
+  for (auto& h : h_x_HT_maxdy_type::all) {
+    const auto vars = ivanp::rsplit<2>(h.name,'_');
+    slice_to_root(*h,vars[0],vars[1],vars[2]);
+  }
+
+  slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
+
 /*
   slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
   slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
   slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
-
-  slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
 
   slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
   slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");

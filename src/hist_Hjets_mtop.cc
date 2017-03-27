@@ -328,19 +328,22 @@ int main(int argc, char* argv[]) {
     }
   }
 
-/*
   // xi vs xj in bins of HT
   a_(_x3)
-  re_hist<1,1,0>
-    h_xH_x1_HT(a__x3,a__x3,a__HT),
-    h_xH_x2_HT(a__x3,a__x3,a__HT),
-    h_x1_x2_HT(a__x3,a__x3,a__HT);
-*/
+  auto h_xx_HT = reserve<re_hist<1,1,0>>((njmax*(njmax+1))/2);
+  for (unsigned i=0; i<njmax; ++i) {
+    for (unsigned j=i+1; j<=njmax; ++j) {
+      static char name[] = "xi_xj_HT";
+      name[1] = (i ? char('0'+i) : 'H');
+      name[4] = (j ? char('0'+j) : 'H');
+      h_xx_HT.emplace_back(name,a__x3,a__x3,a__HT);
+    }
+  }
 
   // maxdy vs maxdphi in bins of HT
   a_(_maxdy2) a_(_maxdphi2)
   re_hist<1,1,0>
-    h_maxdy_maxdphi_HT(a__maxdy2,a__maxdphi2,a__HT);
+    h_maxdy_maxdphi_HT("maxdy_maxdphi_HT",a__maxdy2,a__maxdphi2,a__HT);
 
   // ================================================================
 
@@ -503,69 +506,16 @@ int main(int argc, char* argv[]) {
       for (unsigned j=0; j<=njmax; ++j)
         h_p1pT_p2x[i][j]( pT[i], frac_HT[j] );
 
+    for (unsigned i=0, k=0; i<njmax; ++i)
+      for (unsigned j=i+1; j<=njmax; ++j)
+        h_xx_HT[k++]( frac_HT[i], frac_HT[j], HT );
+
     if (njets<1) continue; // 111111111111111111111111111111111111111
 
     (*h_hgam_pT_j1)(jets[0].pT);
     (*h_hgam_yAbs_j1)(std::abs(jets[0].y));
 
     if (njets<2) continue; // 222222222222222222222222222222222222222
-
-/*
-    // HT fraction x in bins on HT and max rapidity separation
-    const double xH = H_pT/HT, x1 = jets[0].pT/HT, x2 = jets[1].pT/HT;
-
-    const auto xH_HT_bin = h_xH_HT(xH, HT);
-    const auto x1_HT_bin = h_x1_HT(x1, HT);
-    const auto x2_HT_bin = h_x2_HT(x2, HT);
-
-    const auto xH_HT_maxdy_bin = h_xH_HT_maxdy(xH, HT, max_dy);
-    const auto x1_HT_maxdy_bin = h_x1_HT_maxdy(x1, HT, max_dy);
-    const auto x2_HT_maxdy_bin = h_x2_HT_maxdy(x2, HT, max_dy);
-
-    // p1's pT in bins of p2's x
-    h_p1pT_p2x[0][0](H_pT, xH);
-    h_p1pT_p2x[1][0](jets[0].pT, xH);
-    h_p1pT_p2x[2][0](jets[1].pT, xH);
-    h_p1pT_p2x[0][1](H_pT, x1);
-    h_p1pT_p2x[1][1](jets[0].pT, x1);
-    h_p1pT_p2x[2][1](jets[1].pT, x1);
-    h_p1pT_p2x[0][2](H_pT, x2);
-    h_p1pT_p2x[1][2](jets[0].pT, x2);
-    h_p1pT_p2x[2][2](jets[1].pT, x2);
-
-    h_xH_x1_HT(xH,x1,HT);
-    h_xH_x2_HT(xH,x2,HT);
-    h_x1_x2_HT(x1,x2,HT);
-
-    (*h_maxdy_maxdphi_HT)(max_dy,max_dphi,HT);
-
-    const auto isp = get_isp(*_id1, *_id2);
-    if (isp == gg) {
-      h_gg_xH_HT.fill_bin_check(xH_HT_bin);
-      h_gg_x1_HT.fill_bin_check(x1_HT_bin);
-      h_gg_x2_HT.fill_bin_check(x2_HT_bin);
-
-      h_gg_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
-      h_gg_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
-      h_gg_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
-    } else if (isp == gq) {
-      h_gq_xH_HT.fill_bin_check(xH_HT_bin);
-      h_gq_x1_HT.fill_bin_check(x1_HT_bin);
-      h_gq_x2_HT.fill_bin_check(x2_HT_bin);
-
-      h_gq_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
-      h_gq_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
-      h_gq_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
-    } else {
-      h_qq_xH_HT.fill_bin_check(xH_HT_bin);
-      h_qq_x1_HT.fill_bin_check(x1_HT_bin);
-      h_qq_x2_HT.fill_bin_check(x2_HT_bin);
-
-      h_qq_xH_HT_maxdy.fill_bin_check(xH_HT_maxdy_bin);
-      h_qq_x1_HT_maxdy.fill_bin_check(x1_HT_maxdy_bin);
-      h_qq_x2_HT_maxdy.fill_bin_check(x2_HT_maxdy_bin);
-    }
-*/
 
     // Jet pair with highest pT .....................................
     const dijet jjpT(jets[0],jets[1]);
@@ -647,10 +597,8 @@ int main(int argc, char* argv[]) {
   for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
   for (auto& h : re_hist<1,0>::all) {
-    const auto sep  = h.name.rfind('_');
-    const auto name = h.name.substr(0,sep);
-    const auto var  = h.name.substr(sep+1);
-    slice_to_root(*h,name,var);
+    const auto vars = ivanp::rsplit<1>(h.name,'_');
+    slice_to_root(*h,vars[0],vars[1]);
   }
 
   for (auto& h : h_x_HT_maxdy_type::all) {
@@ -658,55 +606,10 @@ int main(int argc, char* argv[]) {
     slice_to_root(*h,vars[0],vars[1],vars[2]);
   }
 
-  slice_to_root<2>(h_maxdy_maxdphi_HT,"maxdy_maxdphi","HT");
-
-/*
-  slice_to_root<2>(h_xH_x1_HT,"xH_x1","HT");
-  slice_to_root<2>(h_xH_x2_HT,"xH_x2","HT");
-  slice_to_root<2>(h_x1_x2_HT,"x1_x2","HT");
-
-  slice_to_root<1>(h_p1pT_p2x[0][0],   "H_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[0][1],   "H_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[0][2],   "H_pT","x2");
-  slice_to_root<1>(h_p1pT_p2x[1][0],"jet1_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[1][1],"jet1_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[1][2],"jet1_pT","x2");
-  slice_to_root<1>(h_p1pT_p2x[2][0],"jet2_pT","xH");
-  slice_to_root<1>(h_p1pT_p2x[2][1],"jet2_pT","x1");
-  slice_to_root<1>(h_p1pT_p2x[2][2],"jet2_pT","x2");
-
-  slice_to_root<1>(h_xH_HT,"xH","HT");
-  slice_to_root<1>(h_x1_HT,"x1","HT");
-  slice_to_root<1>(h_x2_HT,"x2","HT");
-
-  slice_to_root<1>(h_xH_HT_maxdy,"xH","xH_x1","HT");
-  slice_to_root<1>(h_x1_HT_maxdy,"x1","xH_x1","HT");
-  slice_to_root<1>(h_x2_HT_maxdy,"x2","xH_x1","HT");
-
-  slice_to_root<1>(h_gg_xH_HT,"gg_xH","HT");
-  slice_to_root<1>(h_gg_x1_HT,"gg_x1","HT");
-  slice_to_root<1>(h_gg_x2_HT,"gg_x2","HT");
-
-  slice_to_root<1>(h_gq_xH_HT,"gq_xH","HT");
-  slice_to_root<1>(h_gq_x1_HT,"gq_x1","HT");
-  slice_to_root<1>(h_gq_x2_HT,"gq_x2","HT");
-
-  slice_to_root<1>(h_qq_xH_HT,"qq_xH","HT");
-  slice_to_root<1>(h_qq_x1_HT,"qq_x1","HT");
-  slice_to_root<1>(h_qq_x2_HT,"qq_x2","HT");
-
-  slice_to_root<1>(h_gg_xH_HT_maxdy,"gg_xH","xH_x1","HT");
-  slice_to_root<1>(h_gg_x1_HT_maxdy,"gg_x1","xH_x1","HT");
-  slice_to_root<1>(h_gg_x2_HT_maxdy,"gg_x2","xH_x1","HT");
-
-  slice_to_root<1>(h_gq_xH_HT_maxdy,"gq_xH","xH_x1","HT");
-  slice_to_root<1>(h_gq_x1_HT_maxdy,"gq_x1","xH_x1","HT");
-  slice_to_root<1>(h_gq_x2_HT_maxdy,"gq_x2","xH_x1","HT");
-
-  slice_to_root<1>(h_qq_xH_HT_maxdy,"qq_xH","xH_x1","HT");
-  slice_to_root<1>(h_qq_x1_HT_maxdy,"qq_x1","xH_x1","HT");
-  slice_to_root<1>(h_qq_x2_HT_maxdy,"qq_x2","xH_x1","HT");
-*/
+  for (auto& h : re_hist<1,1,0>::all) {
+    const auto vars = ivanp::rsplit<1>(h.name,'_');
+    slice_to_root<2>(*h,vars[0],vars[1]);
+  }
 
   fout->cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);

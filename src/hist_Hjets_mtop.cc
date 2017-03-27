@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
   TTreeReaderValue<Int_t> _id2(reader,"id2");
 
   // Define histograms ==============================================
-  hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
+  hist<int> h_Njets({njmax+1u,0,int(njmax+1)});
 
 #define a_(name) auto a_##name = ra[#name];
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
@@ -317,11 +317,18 @@ int main(int argc, char* argv[]) {
     }
   }
 
-/*
   // p1's pT in bins of p2's x
-  std::array<std::array< re_hist<1,0>, 3>,3> h_p1pT_p2x;
-  for (auto& a : h_p1pT_p2x) for (auto& h : a) h = {a__pT,a__x2};
+  std::vector<std::vector< re_hist<1,0> >> h_p1pT_p2x(njmax+1);
+  for (unsigned i=0; i<=njmax; ++i) {
+    h_p1pT_p2x[i].reserve(njmax+1);
+    for (unsigned j=0; j<=njmax; ++j) {
+      h_p1pT_p2x[i].emplace_back(
+        cat(i ? cat("jet",i) : "H","_pT_x",j ? char('0'+j) : 'H'),
+        a__pT,a__x2);
+    }
+  }
 
+/*
   // xi vs xj in bins of HT
   a_(_x3)
   re_hist<1,1,0>
@@ -479,7 +486,7 @@ int main(int argc, char* argv[]) {
     const auto isp = get_isp(*_id1, *_id2);
 
     // HT fractions .................................................
-    static std::vector<double> frac_HT(njmax+1);
+    std::vector<double> frac_HT(njmax+1);
     auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT, max_dy );
     if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
     for (unsigned i=njmax; i!=0; --i) {
@@ -487,6 +494,14 @@ int main(int argc, char* argv[]) {
       if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
     }
     // ..............................................................
+
+    std::vector<double> pT(njmax+1);
+    pT[0] = H_pT;
+    for (unsigned i=0; i<njets; ++i) pT[i+1] = jets[i].pT;
+
+    for (unsigned i=0; i<=njmax; ++i)
+      for (unsigned j=0; j<=njmax; ++j)
+        h_p1pT_p2x[i][j]( pT[i], frac_HT[j] );
 
     if (njets<1) continue; // 111111111111111111111111111111111111111
 

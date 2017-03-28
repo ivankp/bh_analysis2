@@ -4,6 +4,7 @@
 #include <cstring>
 #include <algorithm>
 #include <memory>
+#include <regex>
 
 #include <boost/optional.hpp>
 
@@ -122,6 +123,26 @@ double hist_bin::weight;
 #ifdef NLO
 int hist_bin::current_id;
 #endif
+
+namespace ivanp { namespace root {
+template <> struct bin_converter<hist_bin> {
+  inline auto weight(const hist_bin& b) const noexcept {
+#ifdef NLO
+    return b.w + b.wtmp;
+#else
+    return b.w;
+#endif
+  }
+  inline auto sumw2(const hist_bin& b) const noexcept {
+#ifdef NLO
+    return b.w2 + sq(b.wtmp);
+#else
+    return b.w2;
+#endif
+  }
+  inline auto num(const hist_bin& b) const noexcept { return b.n; }
+};
+}}
 
 template <typename... Axes>
 using hist_t = ivanp::binner<hist_bin,
@@ -492,7 +513,7 @@ int main(int argc, char* argv[]) {
     std::vector<double> frac_HT(njmax+1);
     auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT, max_dy );
     if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
-    for (unsigned i=njmax; i!=0; --i) {
+    for (unsigned i=njets; i!=0; --i) {
       x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT, max_dy );
       if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
     }
@@ -502,15 +523,13 @@ int main(int argc, char* argv[]) {
     pT[0] = H_pT;
     for (unsigned i=0; i<njets; ++i) pT[i+1] = jets[i].pT;
 
-    for (unsigned i=0; i<=njmax; ++i)
-      for (unsigned j=0; j<=njmax; ++j)
+    for (unsigned i=0; i<=njets; ++i)
+      for (unsigned j=0; j<=njets; ++j)
         h_p1pT_p2x[i][j]( pT[i], frac_HT[j] );
 
-    for (unsigned i=0, k=0; i<njmax; ++i)
-      for (unsigned j=i+1; j<=njmax; ++j)
+    for (unsigned i=0, k=0; i<njets; ++i)
+      for (unsigned j=i+1; j<=njets; ++j)
         h_xx_HT[k++]( frac_HT[i], frac_HT[j], HT );
-
-    if (njets<1) continue; // 111111111111111111111111111111111111111
 
     (*h_hgam_pT_j1)(jets[0].pT);
     (*h_hgam_yAbs_j1)(std::abs(jets[0].y));
@@ -538,7 +557,7 @@ int main(int argc, char* argv[]) {
     const auto Hjj = *higgs + jjpT.p;
 
     (*h_hgam_pT_yyjj)(Hjj.Pt());
-    (*h_hgam_Dphi_yy_jj)(dphi(H_phi,jjpT.p.Phi()));
+    (*h_hgam_Dphi_yy_jj)( M_PI - dphi(H_phi,jjpT.p.Phi()) );
     // --------------------------------------------------------------
 
     if (njets<3) continue; // 333333333333333333333333333333333333333
@@ -601,9 +620,20 @@ int main(int argc, char* argv[]) {
     slice_to_root(*h,vars[0],vars[1]);
   }
 
+  std::regex _maxdy_right("(_maxdy)\\[(.+),(.+)\\)");
+  std::string _maxdy_inf("_maxdy∞");
   for (auto& h : h_x_HT_maxdy_type::all) {
+    h->integrate_right<2>();
     const auto vars = ivanp::rsplit<2>(h.name,'_');
-    slice_to_root(*h,vars[0],vars[1],vars[2]);
+    for ( auto* h : slice_to_root(*h,vars[0],vars[1],vars[2]) ) {
+      std::string name = std::regex_replace(h->GetName(),_maxdy_right,"$1$3");
+      // const auto inf = name.rfind(_maxdy_inf);
+      // if (inf!=std::string::npos) name.erase(inf,_maxdy_inf.size());
+      const auto len = _maxdy_inf.size();
+      const auto pos = name.size()-len;
+      if (!name.compare(pos,len,_maxdy_inf)) name.erase(pos);
+      h->SetName( name.c_str() );
+    }
   }
 
   for (auto& h : re_hist<1,1,0>::all) {

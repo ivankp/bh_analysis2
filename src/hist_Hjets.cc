@@ -119,7 +119,8 @@ template <> class bin_converter<hist_bin> {
   }
 public:
   inline auto weight(const hist_bin& b) const noexcept {
-    return get(b).w;
+    auto _b = get(b);
+    return _b.w + _b.wtmp;
   }
   inline auto sumw2(const hist_bin& b) const noexcept {
     auto _b = get(b);

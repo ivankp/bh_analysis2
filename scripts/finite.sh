@@ -1,6 +1,6 @@
 #!/bin/bash
 
-./bin/bh_analysis2/bin/hist_Hjets_mtop 2j out:finite_raw.root \
-  `sed 's|.*|/msu/data/t3work4/luisonig/H2jets_ggf_mtop/NTuplesFiles/&|' ~ivanp/finite_H2j_ok.txt`
+./bin/hist_Hjets_mtop ${1}j out:finite_raw_${1}j.root \
+  $(sed "s|.*|/msu/data/t3work4/luisonig/H${1}jets_ggf_mtop/NTuplesFiles/&|" ~ivanp/finite_H${1}j_ok.txt)
 
-~ivanp/work/bh_analysis/bin/merge_parts finite.root finite_raw.root
+~ivanp/work/bh_analysis/bin/merge_parts finite_${1}j.root finite_raw_${1}j.root

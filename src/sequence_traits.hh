@@ -91,6 +91,15 @@ public:
 };
 template <typename S> using inverse_t = typename inverse<S>::type;
 
+// transformations **************************************************
+
+template <typename Seq> struct reflect;
+template <typename T, T... I>
+struct reflect<std::integer_sequence<T,I...>> {
+  using type = std::integer_sequence<T,(sizeof...(I)-1-I)...>;
+};
+template <typename S> using reflect_t = typename reflect<S>::type;
+
 // ******************************************************************
 
 } // end namespace seq

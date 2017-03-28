@@ -6,6 +6,7 @@
 #include <tuple>
 #include <array>
 #include <vector>
+#include <iterator>
 #include <stdexcept>
 
 #include "axis.hh"
@@ -70,16 +71,56 @@ private:
     const std::array<T,N>& args
   ) { return axis_type<I>({std::get<A>(args)...}); }
 
-  template <size_t I>
-  constexpr std::enable_if_t<I!=0,size_type> nbins_total_impl() const noexcept{
-    return ( axis<I>().nbins() + axis_spec<I>::nover::value
-      ) * nbins_total_impl<I-1>();
-  }
-  template <size_t I>
-  constexpr std::enable_if_t<I==0,size_type> nbins_total_impl() const noexcept{
-    return ( axis<0>().nbins() + axis_spec<0>::nover::value );
+public:
+  template <unsigned I=0>
+  constexpr const auto& axis() const noexcept { return std::get<I>(_axes); }
+  constexpr const auto& axes() const noexcept { return _axes; }
+
+  template <unsigned I=0>
+  constexpr size_type nbins() const noexcept {
+    static_assert( I < naxes, "Axis index out of range" );
+    return axis<I>().nbins() + axis_spec<I>::nover::value;
   }
 
+  template <unsigned I> // including I
+  constexpr std::enable_if_t<I!=0,size_type> nbins_left() const noexcept {
+    return nbins<I>() * nbins_left<I-1>();
+  }
+  template <unsigned I> // including I
+  constexpr std::enable_if_t<I==0,size_type> nbins_left() const noexcept {
+    return nbins<I>();
+  }
+  template <unsigned I> // excluding I
+  constexpr std::enable_if_t<I!=0,size_type> nbins_before() const noexcept {
+    return nbins_left<I-1>();
+  }
+  template <unsigned I> // excluding I
+  constexpr std::enable_if_t<I==0,size_type> nbins_before() const noexcept {
+    return 1;
+  }
+
+  template <unsigned I> // including I
+  constexpr std::enable_if_t<I!=naxes-1,size_type> nbins_right() const noexcept {
+    return nbins<I>() * nbins_right<I+1>();
+  }
+  template <unsigned I> // including I
+  constexpr std::enable_if_t<I==naxes-1,size_type> nbins_right() const noexcept {
+    return nbins<I>();
+  }
+  template <unsigned I> // excluding I
+  constexpr std::enable_if_t<(I<naxes-1),size_type> nbins_after() const noexcept {
+    return nbins_right<I+1>();
+  }
+  template <unsigned I> // excluding I
+  constexpr std::enable_if_t<(I>=naxes-1),size_type> nbins_after() const noexcept {
+    return 1;
+  }
+
+  constexpr size_type nbins_total() const noexcept {
+    return nbins_left<naxes-1>();
+  }
+
+private:
   template <size_t I, typename A = axis_spec<I>>
   constexpr std::enable_if_t<A::under::value,bool>
   guard_under(size_type bin) const noexcept { return false; }
@@ -209,21 +250,6 @@ public:
     return *this;
   }
 
-  template <unsigned I=0>
-  constexpr const auto& axis() const noexcept {
-    return std::get<I>(_axes);
-  }
-  constexpr const auto& axes() const noexcept { return _axes; }
-
-  template <unsigned I=0>
-  constexpr size_type nbins() const noexcept {
-    return axis<I>().nbins() + axis_spec<I>::nover::value;
-  }
-
-  constexpr size_type nbins_total() const noexcept {
-    return nbins_total_impl<naxes-1>();
-  }
-
   inline const container_type& bins() const noexcept { return _bins; }
   inline container_type& bins() noexcept { return _bins; }
 
@@ -296,15 +322,43 @@ public:
   }
 
   // Algorithms -----------------------------------------------------
-  void integrate_right() {
-    auto b=++_bins.begin();
-    const auto end = _bins.end();
-    for ( ; b!=end; ++b) (*b) += (*(b-1));
+  template <unsigned I=0> void integrate_right() {
+    const size_type nb = nbins_before<I>();
+    const size_type n  = nbins<I>()-1;
+    const size_type na = nbins_after<I>();
+
+    auto begin = _bins.begin();
+    for (size_type a=na; a; --a) {
+      for (size_type b=nb; b;) { --b;
+        auto prev = begin;
+        for (size_type i=n; i; --i) {
+          auto it = std::next(prev,nb);
+          *it += *prev;
+          prev = it;
+        }
+        if (b) ++begin;
+        else begin = std::next(prev);
+      }
+    }
   }
-  void integrate_left() {
-    auto b=++_bins.rbegin();
-    const auto end = _bins.rend();
-    for ( ; b!=end; ++b) (*b) += (*(b-1));
+  template <unsigned I=0> void integrate_left() {
+    const size_type nb = nbins_before<I>();
+    const size_type n  = nbins<I>()-1;
+    const size_type na = nbins_after<I>();
+
+    auto begin = _bins.rbegin();
+    for (size_type a=na; a; --a) {
+      for (size_type b=nb; b;) { --b;
+        auto prev = begin;
+        for (size_type i=n; i; --i) {
+          auto it = std::next(prev,nb);
+          *it += *prev;
+          prev = it;
+        }
+        if (b) ++begin;
+        else begin = std::next(prev);
+      }
+    }
   }
 };
 

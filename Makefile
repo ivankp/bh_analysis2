@@ -41,6 +41,9 @@ L_hist_example := $(L_hist_Hjets)
 C_njets_test := $(C_hist_Hjets)
 L_njets_test := $(L_hist_Hjets)
 
+C_xsec_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_xsec_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+
 SRC := src
 BIN := bin
 BLD := .build

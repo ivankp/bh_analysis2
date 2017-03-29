@@ -274,7 +274,7 @@ int main(int argc, char* argv[]) {
     h_jet_mass.emplace_back(name,ra[name]);
   }
 
-  h_(Hjets_mass)
+  h_(Hjets_mass) h_(Hjets_mass_close)
 
 #define jjpT_h_(name) \
   optional<re_hist<1>> h_jjpT_##name; \
@@ -327,44 +327,50 @@ int main(int argc, char* argv[]) {
     ivanp::axis_spec<re_axis,false,true> >;
 
   std::array<std::vector<h_x_HT_maxdy_type>,4> h_x_HT;
-  for (int isp=0; isp<4; ++isp) { // any, gg, gq, qq
-    static char name[] = "ii_xj_HT_maxdy";
-    name[0] = (isp < qq ? 'g' : 'q');
-    name[1] = (isp < gq ? 'g' : 'q');
-    h_x_HT[isp].reserve(njmax+1); // +1 for Higgs
-    for (unsigned j=0; j<=njmax; ++j) {
-      name[4] = (j ? char('0'+j) : 'H');
-      h_x_HT[isp].emplace_back(isp ? name : name+3, a__x, a__HT, a__maxdy);
-    }
-  }
-
-  // p1's pT in bins of p2's x
   std::vector<std::vector< re_hist<1,0> >> h_p1pT_p2x(njmax+1);
-  for (unsigned i=0; i<=njmax; ++i) {
-    h_p1pT_p2x[i].reserve(njmax+1);
-    for (unsigned j=0; j<=njmax; ++j) {
-      h_p1pT_p2x[i].emplace_back(
-        cat(i ? cat("jet",i) : "H","_pT_x",j ? char('0'+j) : 'H'),
-        a__pT,a__x2);
-    }
-  }
+  std::vector<re_hist<1,1,0>> h_xx_HT;
+  optional<re_hist<1,1,0>> h_maxdy_maxdphi_HT;
 
-  // xi vs xj in bins of HT
-  a_(_x3)
-  auto h_xx_HT = reserve<re_hist<1,1,0>>((njmax*(njmax+1))/2);
-  for (unsigned i=0; i<njmax; ++i) {
-    for (unsigned j=i+1; j<=njmax; ++j) {
-      static char name[] = "xi_xj_HT";
-      name[1] = (i ? char('0'+i) : 'H');
-      name[4] = (j ? char('0'+j) : 'H');
-      h_xx_HT.emplace_back(name,a__x3,a__x3,a__HT);
-    }
-  }
+  if (need_njets >= 2) {
 
-  // maxdy vs maxdphi in bins of HT
-  a_(_maxdy2) a_(_maxdphi2)
-  re_hist<1,1,0>
-    h_maxdy_maxdphi_HT("maxdy_maxdphi_HT",a__maxdy2,a__maxdphi2,a__HT);
+    for (int isp=0; isp<4; ++isp) { // any, gg, gq, qq
+      static char name[] = "ii_xj_HT_maxdy";
+      name[0] = (isp < qq ? 'g' : 'q');
+      name[1] = (isp < gq ? 'g' : 'q');
+      h_x_HT[isp].reserve(njmax+1); // +1 for Higgs
+      for (unsigned j=0; j<=njmax; ++j) {
+        name[4] = (j ? char('0'+j) : 'H');
+        h_x_HT[isp].emplace_back(isp ? name : name+3, a__x, a__HT, a__maxdy);
+      }
+    }
+
+    // p1's pT in bins of p2's x
+    for (unsigned i=0; i<=njmax; ++i) {
+      h_p1pT_p2x[i].reserve(njmax+1);
+      for (unsigned j=0; j<=njmax; ++j) {
+        h_p1pT_p2x[i].emplace_back(
+          cat(i ? cat("jet",i) : "H","_pT_x",j ? char('0'+j) : 'H'),
+          a__pT,a__x2);
+      }
+    }
+
+    // xi vs xj in bins of HT
+    a_(_x3)
+    h_xx_HT.reserve((njmax*(njmax+1))/2);
+    for (unsigned i=0; i<njmax; ++i) {
+      for (unsigned j=i+1; j<=njmax; ++j) {
+        static char name[] = "xi_xj_HT";
+        name[1] = (i ? char('0'+i) : 'H');
+        name[4] = (j ? char('0'+j) : 'H');
+        h_xx_HT.emplace_back(name,a__x3,a__x3,a__HT);
+      }
+    }
+
+    // maxdy vs maxdphi in bins of HT
+    a_(_maxdy2) a_(_maxdphi2)
+    h_maxdy_maxdphi_HT.emplace("maxdy_maxdphi_HT",a__maxdy2,a__maxdphi2,a__HT);
+
+  }
 
   // ================================================================
 
@@ -469,7 +475,9 @@ int main(int argc, char* argv[]) {
     h_H_phi(H_phi);
     h_H_mass(higgs->M());
 
-    h_Hjets_mass(Hjets.M());
+    const auto Hjets_mass = Hjets.M();
+    h_Hjets_mass(Hjets_mass);
+    h_Hjets_mass_close(Hjets_mass);
 
     h_hgam_pT_yy(H_pT);
     h_hgam_yAbs_yy(std::abs(H_y));
@@ -485,51 +493,53 @@ int main(int argc, char* argv[]) {
     }
     // ..............................................................
 
-    // find maximum rapidity separation in the event ................
-    double max_dy = std::abs(jets[0].y-H_y);
-    for (unsigned i=1; i<njets; ++i) {
-      for (unsigned j=0; j<i; ++j) {
-        larger(max_dy,std::abs(jets[i].y-jets[j].y));
+    if ( need_njets >= 2 ) {
+      // find maximum rapidity separation in the event ................
+      double max_dy = std::abs(jets[0].y-H_y);
+      for (unsigned i=1; i<njets; ++i) {
+        for (unsigned j=0; j<i; ++j) {
+          larger(max_dy,std::abs(jets[i].y-jets[j].y));
+        }
+        larger(max_dy,std::abs(jets[i].y-H_y));
       }
-      larger(max_dy,std::abs(jets[i].y-H_y));
-    }
-    // ..............................................................
+      // ..............................................................
 
-    // find maximum phi separation in the event .....................
-    double max_dphi = dphi(jets[0].phi,H_phi);
-    for (unsigned i=1; i<njets; ++i) {
-      for (unsigned j=0; j<i; ++j) {
-        larger(max_dphi,dphi(jets[i].phi,jets[j].phi));
+      // find maximum phi separation in the event .....................
+      double max_dphi = dphi(jets[0].phi,H_phi);
+      for (unsigned i=1; i<njets; ++i) {
+        for (unsigned j=0; j<i; ++j) {
+          larger(max_dphi,dphi(jets[i].phi,jets[j].phi));
+        }
+        larger(max_dphi,dphi(jets[i].phi,H_phi));
       }
-      larger(max_dphi,dphi(jets[i].phi,H_phi));
+      // ..............................................................
+
+      (*h_maxdy_maxdphi_HT)(max_dy,max_dphi,HT);
+
+      const auto isp = get_isp(*_id1, *_id2);
+
+      // HT fractions .................................................
+      std::vector<double> frac_HT(njmax+1);
+      auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT, max_dy );
+      if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
+      for (unsigned i=njets; i!=0; --i) {
+        x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT, max_dy );
+        if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
+      }
+      // ..............................................................
+
+      std::vector<double> pT(njets+1);
+      pT[0] = H_pT;
+      for (unsigned i=0; i<njets; ++i) pT[i+1] = jets[i].pT;
+
+      for (unsigned i=0; i<=njets; ++i)
+        for (unsigned j=0; j<=njets; ++j)
+          h_p1pT_p2x[i][j]( pT[i], frac_HT[j] );
+
+      for (unsigned i=0, k=0; i<njets; ++i)
+        for (unsigned j=i+1; j<=njets; ++j)
+          h_xx_HT[k++]( frac_HT[i], frac_HT[j], HT );
     }
-    // ..............................................................
-
-    h_maxdy_maxdphi_HT(max_dy,max_dphi,HT);
-
-    const auto isp = get_isp(*_id1, *_id2);
-
-    // HT fractions .................................................
-    std::vector<double> frac_HT(njmax+1);
-    auto x_HT_bin = h_x_HT[any_isp][0]( frac_HT[0] = H_pT/HT, HT, max_dy );
-    if (x_HT_bin+1) h_x_HT[isp][0].fill_bin( x_HT_bin );
-    for (unsigned i=njets; i!=0; --i) {
-      x_HT_bin = h_x_HT[any_isp][i]( frac_HT[i] = jets[i-1].pT / HT, HT, max_dy );
-      if (x_HT_bin+1) h_x_HT[isp][i].fill_bin( x_HT_bin );
-    }
-    // ..............................................................
-
-    std::vector<double> pT(njmax+1);
-    pT[0] = H_pT;
-    for (unsigned i=0; i<njets; ++i) pT[i+1] = jets[i].pT;
-
-    for (unsigned i=0; i<=njets; ++i)
-      for (unsigned j=0; j<=njets; ++j)
-        h_p1pT_p2x[i][j]( pT[i], frac_HT[j] );
-
-    for (unsigned i=0, k=0; i<njets; ++i)
-      for (unsigned j=i+1; j<=njets; ++j)
-        h_xx_HT[k++]( frac_HT[i], frac_HT[j], HT );
 
     (*h_hgam_pT_j1)(jets[0].pT);
     (*h_hgam_yAbs_j1)(std::abs(jets[0].y));

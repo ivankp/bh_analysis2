@@ -211,20 +211,20 @@ int main(int argc, char* argv[]) {
   printf("%-11s %11lu  %11lu\n","num_entries",num_entries_total,num_entries_selected);
 
   cout << "\nWeights" << endl;
-  printf("%-15s %-13s %-13s %-13s %-13s\n",
+  printf("%-30s %-13s %-13s %-13s %-13s\n",
          "","total","sumw2","selected","sumw2");
   for (unsigned i=0; i<nw; ++i) printf(
-    "%-15s %13.7e %13.7e %13.7e %13.7e\n",
+    "%-30s %13.7e %13.7e %13.7e %13.7e\n",
     _weights[i].GetBranchName(),
     total_weight[i].w, total_weight[i].w2,
     selected_weight[i].w, selected_weight[i].w2
   );
 
   cout << "\nCross sections" << endl;
-  printf("%-15s %-13s %-13s %-13s %-13s\n",
+  printf("%-30s %-13s %-13s %-13s %-13s\n",
          "","total","unc","selected","unc");
   for (unsigned i=0; i<nw; ++i) printf(
-    "%-15s %13.7e %13.7e %13.7e %13.7e\n",
+    "%-30s %13.7e %13.7e %13.7e %13.7e\n",
     _weights[i].GetBranchName(),
     total_weight[i].w/ncount_total,
     std::sqrt(total_weight[i].w2)/ncount_total,

@@ -1,20 +1,9 @@
-# Compilation output
-/bin
-/.build
+/*
 
-# Computation output
-/out
-/*.root
-/*.pdf
-/*.out
-/*.err
+!.gitignore
+!Makefile
+!src/
+!config/
+!scripts/
 
-# Input files
-/data
-/ntuples
-
-# vim
-.*.swp
-
-# tests and work in progress
-/test*
+**.swp

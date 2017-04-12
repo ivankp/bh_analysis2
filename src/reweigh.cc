@@ -14,6 +14,7 @@
 
 #include "LHAPDF/LHAPDF.h"
 
+#include "math.hh"
 #include "timed_counter.hh"
 // #include "catstr.hh"
 
@@ -25,19 +26,18 @@ using std::cerr;
 using std::endl;
 
 // using ivanp::cat;
+using namespace ivanp::math;
 
 constexpr std::array<int,10> quarks {
-   1,-1, 2,-2, 3,-3, 4,-4, 5,-5
+  1,-1, 2,-2, 3,-3, 4,-4, 5,-5
 };
 
 struct entry {
   Int_t           nparticle;
   Float_t         px[8]; //[nparticle]
   Float_t         py[8]; //[nparticle]
-  // Float_t         pz[8]; //[nparticle]
-  // Float_t         E [8]; //[nparticle]
+  Int_t           kf[8];
   Double_t        alphas;
-  Double_t        weight;
   Double_t        weight2;
   Double_t        me_wgt;
   Double_t        me_wgt2;
@@ -47,7 +47,7 @@ struct entry {
   Double_t        fac_scale;
   Double_t        ren_scale;
   Double_t        usr_wgts[18]; //[nuwgt]
-  Short_t         alphas_power;
+  Char_t          alphas_power;
   Char_t          part[2];
 
   static entry current;
@@ -61,6 +61,8 @@ std::vector<unsigned> scales_fac, scales_ren;
 struct scale_def {
   boost::optional<unsigned> fac, ren;
   scale_def(unsigned f, unsigned r): fac(f), ren(r) { }
+  scale_def(boost::none_t f, unsigned r): fac(f), ren(r) { }
+  scale_def(unsigned f, boost::none_t r): fac(f), ren(r) { }
 };
 std::vector<scale_def> scales;
 
@@ -147,21 +149,46 @@ public:
     for (unsigned i=0; i<scale_fcns.size(); ++i)
       scale_values[i] = scale_fcns[i](*this);
 
-    for (auto i : scales_fac) fac_calc(i);
-    for (auto i : scales_ren) ren_calc(i);
+    for (unsigned i=0; i<scales_fac.size(); ++i) fac_calc(i);
+    for (unsigned i=0; i<scales_ren.size(); ++i) ren_calc(i);
 
     for (unsigned i=0; i<scales.size(); ++i) { // combine
       const scale_def& scale = scales[i];
-      const fac_vars& fac = _fac_vars[i];
-      const ren_vars& ren = _ren_vars[i];
 
-      const double m = scale.fac ? (fac.m + ren.w0*fac.ff) : weight2;
+      double& w = new_weights[i];
+      if (scale.fac) {
+        const fac_vars& fac = _fac_vars[*scale.fac];
+        w = fac.m;
+        if (scale.ren) {
+          const ren_vars& ren = _ren_vars[*scale.ren];
+          w += ren.w0 * fac.ff;
+        } else {
+          w += me_wgt2 * fac.ff;
+        }
+      } else {
+        w = weight2;
+      }
+      if (scale.ren) {
+        const ren_vars& ren = _ren_vars[*scale.ren];
+        w *= ren.ar;
+      }
 
-      new_weights[i] = scale.ren ? ren.ar * m : m;
+      test( w )
     }
   }
   inline double operator[](unsigned i) const { return new_weights[i]; }
 };
+
+double Ht_Higgs(const entry& e) noexcept {
+  double _Ht = 0.;
+  for (Int_t i=0; i<e.nparticle; ++i) {
+    double pt2 = sq(e.px[i],e.py[i]);
+    if (e.kf[i]==25) pt2 += sq(125.); // mH^2
+    _Ht += std::sqrt(pt2);
+  }
+  return _Ht;
+}
+
 
 template <typename T>
 void branch(TChain& chain, const char* name, T* addr) {
@@ -171,14 +198,14 @@ void branch(TChain& chain, const char* name, T* addr) {
 
 int main(int argc, char* argv[]) {
   if (argc==1) {
-    cout << "usage: " << argv[0] << " input.root output.root" << endl;
+    cout << "usage: " << argv[0] << " input.root ..." << endl;
     return 0;
   }
 
   pdf = LHAPDF::mkPDF("CT10nlo",0);
 
   // Open input ntuples root file ===================================
-  TChain chain("BHSntuples");
+  TChain chain("t3");
   cout << "\033[36mInput ntuples\033[0m:" << endl;
   for (int i=1; i<argc; ++i) {
     cout << "  " << argv[i] << endl;
@@ -187,26 +214,34 @@ int main(int argc, char* argv[]) {
   cout << endl;
 
   chain.SetBranchStatus("*",0);
-  branch(chain, "alphas",      &entry::current.alphas);
-  branch(chain, "weight",      &entry::current.weight);
-  branch(chain, "me_wgt",      &entry::current.me_wgt);
-  branch(chain, "x1",          &entry::current.x[0]);
-  branch(chain, "x2",          &entry::current.x[1]);
-  branch(chain, "x1p",         &entry::current.xp[0]);
-  branch(chain, "x2p",         &entry::current.xp[1]);
-  branch(chain, "id1",         &entry::current.id[0]);
-  branch(chain, "id2",         &entry::current.id[1]);
-  branch(chain, "fac_scale",   &entry::current.fac_scale);
-  branch(chain, "ren_scale",   &entry::current.ren_scale);
-  branch(chain, "usr_wgts",     entry::current.usr_wgts);
-  branch(chain, "alphasPower", &entry::current.alphas_power);
-  branch(chain, "part",         entry::current.part);
+  branch(chain, "nparticle",    &entry::current.nparticle);
+  branch(chain, "px",            entry::current.px);
+  branch(chain, "py",            entry::current.py);
+  branch(chain, "kf",            entry::current.kf);
+  branch(chain, "alphas",       &entry::current.alphas);
+  branch(chain, "weight2",      &entry::current.weight2);
+  branch(chain, "me_wgt",       &entry::current.me_wgt);
+  branch(chain, "me_wgt2",      &entry::current.me_wgt2);
+  branch(chain, "x1",           &entry::current.x[0]);
+  branch(chain, "x2",           &entry::current.x[1]);
+  branch(chain, "x1p",          &entry::current.xp[0]);
+  branch(chain, "x2p",          &entry::current.xp[1]);
+  branch(chain, "id1",          &entry::current.id[0]);
+  branch(chain, "id2",          &entry::current.id[1]);
+  branch(chain, "fac_scale",    &entry::current.fac_scale);
+  branch(chain, "ren_scale",    &entry::current.ren_scale);
+  branch(chain, "usr_wgts",      entry::current.usr_wgts);
+  branch(chain, "alphasPower",  &entry::current.alphas_power);
+  branch(chain, "part",          entry::current.part);
 
-  scale_fcns.emplace_back([](const entry&){ return 66.3463; });
+  for (double x : {0.05,0.07,0.10,0.12,0.15,0.20, 0.25,0.3,0.4,0.5})
+    scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
 
-  scales_fac.emplace_back(0);
-  scales_ren.emplace_back(0);
-  scales.emplace_back(0,0);
+  scales_fac = {0,1,2,3,4,5};
+  scales_ren = {5,6,7,8,9};
+  for (unsigned f=0; f<scales_fac.size(); ++f)
+    for (unsigned r=0; r<scales_ren.size(); ++r)
+      scales.emplace_back(f,r);
 
   reweigh rew;
 
@@ -219,7 +254,7 @@ int main(int argc, char* argv[]) {
     rew.refresh();
     rew();
 
-    test( rew[0] )
+    // test( rew[0] )
   }
 
   delete pdf;

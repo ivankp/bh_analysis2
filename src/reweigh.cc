@@ -7,6 +7,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <functional>
+#include <future>
 
 #include <boost/optional.hpp>
 
@@ -130,7 +131,7 @@ class reweigh : entry { // thread instance for an entry
 
     if (part[0]=='V' || part[0]=='I') {
       const double lr = 2.*std::log(muR/ren_scale);
-      v.w0 = me_wgt + lr*usr_wgts[0] + 0.5*lr*lr*usr_wgts[0];
+      v.w0 = me_wgt + lr*usr_wgts[0] + 0.5*lr*lr*usr_wgts[1];
     } else {
       v.w0 = me_wgt2;
     }
@@ -152,6 +153,15 @@ public:
     for (unsigned i=0; i<scales_fac.size(); ++i) fac_calc(i);
     for (unsigned i=0; i<scales_ren.size(); ++i) ren_calc(i);
 
+    // std::vector<std::future<void>> futures;
+    // for (unsigned i=0; i<scales_fac.size(); ++i)
+    //   futures.emplace_back(std::async(&reweigh::fac_calc,this,i));
+    // for (unsigned i=0; i<scales_ren.size(); ++i)
+    //   futures.emplace_back(std::async(&reweigh::ren_calc,this,i));
+    //
+    // for (auto& fut : futures) fut.wait();
+
+/*
     for (unsigned i=0; i<scales.size(); ++i) { // combine
       const scale_def& scale = scales[i];
 
@@ -175,6 +185,34 @@ public:
 
       test( w )
     }
+*/
+
+    std::vector<std::future<void>> futures;
+    for (unsigned i=0; i<scales.size(); ++i) { // combine
+      futures.emplace_back(std::async([&,this,i](){
+        const scale_def& scale = scales[i];
+
+        double& w = new_weights[i];
+        if (scale.fac) {
+          const fac_vars& fac = _fac_vars[*scale.fac];
+          w = fac.m;
+          if (scale.ren) {
+            const ren_vars& ren = _ren_vars[*scale.ren];
+            w += ren.w0 * fac.ff;
+          } else {
+            w += me_wgt2 * fac.ff;
+          }
+        } else {
+          w = weight2;
+        }
+        if (scale.ren) {
+          const ren_vars& ren = _ren_vars[*scale.ren];
+          w *= ren.ar;
+        }
+      }));
+    }
+    for (auto& fut : futures) fut.wait();
+    for (double w : new_weights) test( w )
   }
   inline double operator[](unsigned i) const { return new_weights[i]; }
 };
@@ -235,10 +273,13 @@ int main(int argc, char* argv[]) {
   branch(chain, "part",          entry::current.part);
 
   for (double x : {0.05,0.07,0.10,0.12,0.15,0.20, 0.25,0.3,0.4,0.5})
+  // for (double x : {0.2,0.3,0.5})
     scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
 
   scales_fac = {0,1,2,3,4,5};
   scales_ren = {5,6,7,8,9};
+  // scales_fac = {2};
+  // scales_ren = {0,1,2};
   for (unsigned f=0; f<scales_fac.size(); ++f)
     for (unsigned r=0; r<scales_ren.size(); ++r)
       scales.emplace_back(f,r);

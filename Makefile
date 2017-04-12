@@ -29,8 +29,17 @@ FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
 FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
 
+LHAPDF_CFLAGS := $(shell lhapdf-config --cppflags)
+LHAPDF_LIBS   := $(shell lhapdf-config --ldflags)
+
 C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+
+C_reweigh := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
+L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
+
+C_reweigh1 := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
+L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
 
 C_hist_Hjets_mtop := $(C_hist_Hjets)
 L_hist_Hjets_mtop := $(L_hist_Hjets)
@@ -52,7 +61,9 @@ SRCS := $(shell find $(SRC) -type f -name '*.cc')
 DEPS := $(patsubst $(SRC)%.cc,$(BLD)%.d,$(SRCS))
 
 GREP_EXES := grep -rl '^ *int \+main *(' $(SRC)
-EXES := $(patsubst $(SRC)%.cc,$(BIN)%,$(shell $(GREP_EXES)))
+EXES := $(patsubst $(SRC)%.cc,$(BIN)%,$(filter %.cc,$(shell $(GREP_EXES))))
+
+HISTS := $(filter $(BIN)/hist_%,$(EXES))
 
 NODEPS := clean
 .PHONY: all clean
@@ -65,9 +76,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 -include $(DEPS)
 endif
 
-$(BIN)/hist_Hjets $(BIN)/hist_Hjets_mtop \
-$(BIN)/hist_example \
-: $(BLD)/re_axes.o
+$(HISTS): $(BLD)/re_axes.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@
@@ -75,7 +84,7 @@ $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 $(BLD)/%.o: | $(BLD)
 	$(CXX) $(CF) $(C_$*) -DPREFIX="$(PREFIX)" -c $(filter %.cc,$^) -o $@
 
-$(BIN)/%: $(BLD)/%.o | $(BIN)
+$(EXES): $(BIN)/%: $(BLD)/%.o | $(BIN)
 	$(CXX) $(LF) $(filter %.o,$^) -o $@ $(L_$*)
 
 $(BLD) $(BIN):

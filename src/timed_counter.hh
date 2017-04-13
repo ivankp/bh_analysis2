@@ -81,7 +81,7 @@ public:
     if ( sec_type(clock_type::now()-last).count() > 1 ) print();
   }
 
-  timed_counter() { }
+  timed_counter(): cnt(0), cnt_start(0), cnt_end(0) { }
   timed_counter(value_type i, value_type n): cnt(i), cnt_start(i), cnt_end(n)
   { print(); }
   timed_counter(value_type n): cnt(0), cnt_start(0), cnt_end(n)
@@ -96,9 +96,10 @@ public:
     last = start;
     nb = 30;
   }
-  inline void reset(value_type n) { set(0,n); }
+  inline void reset(value_type n) { reset(0,n); }
 
   inline bool ok() const noexcept { return cmp(cnt,cnt_end); }
+  inline bool operator!() const noexcept { return !ok(); }
 
   // prefix
   inline value_type operator++() { print_check(); return ++cnt; }

@@ -41,6 +41,9 @@ L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
 C_reweigh1 := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
 
+C_reweigh_threaded := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
+L_reweigh_threaded := $(ROOT_LIBS) $(LHAPDF_LIBS)
+
 C_hist_Hjets_mtop := $(C_hist_Hjets)
 L_hist_Hjets_mtop := $(L_hist_Hjets)
 

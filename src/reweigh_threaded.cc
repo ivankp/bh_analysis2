@@ -7,6 +7,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <functional>
+#include <future>
 
 #include <boost/optional.hpp>
 
@@ -32,13 +33,6 @@ constexpr std::array<int,10> quarks {
   1,-1, 2,-2, 3,-3, 4,-4, 5,-5
 };
 
-template <typename T>
-void branch(TTree& tree, const char* name, T* addr) {
-  tree.SetBranchStatus (name, true);
-  tree.SetBranchAddress(name, addr);
-  tree.AddBranchToCache(name, true);
-}
-
 struct entry {
   Int_t           nparticle;
   Float_t         px[8]; //[nparticle]
@@ -57,31 +51,28 @@ struct entry {
   Char_t          alphas_power;
   Char_t          part[2];
 
-  entry(TTree& tree, Long64_t cacheSize) {
-    tree.SetCacheSize(cacheSize);
-    tree.SetBranchStatus("*",0);
-    branch(tree, "nparticle",   &nparticle);
-    branch(tree, "px",           px);
-    branch(tree, "py",           py);
-    branch(tree, "kf",           kf);
-    branch(tree, "alphas",      &alphas);
-    branch(tree, "weight2",     &weight2);
-    branch(tree, "me_wgt",      &me_wgt);
-    branch(tree, "me_wgt2",     &me_wgt2);
-    branch(tree, "x1",          &x[0]);
-    branch(tree, "x2",          &x[1]);
-    branch(tree, "x1p",         &xp[0]);
-    branch(tree, "x2p",         &xp[1]);
-    branch(tree, "id1",         &id[0]);
-    branch(tree, "id2",         &id[1]);
-    branch(tree, "fac_scale",   &fac_scale);
-    branch(tree, "ren_scale",   &ren_scale);
-    branch(tree, "usr_wgts",     usr_wgts);
-    branch(tree, "alphasPower", &alphas_power);
-    branch(tree, "part",         part);
-    tree.StopCacheLearningPhase();
-  }
+  static entry current;
 };
+entry entry::current;
+
+/*
+class guarded_pdf {
+  LHAPDF::PDF *pdf;
+  class wrap {
+    static std::mutex guard;
+    LHAPDF::PDF *pdf;
+  public:
+    wrap(LHAPDF::PDF* pdf): pdf(pdf) { guard.lock(); }
+    ~wrap() { guard.unlock(); }
+    auto operator->() const noexcept { return pdf; }
+  };
+public:
+  ~guarded_pdf() { delete pdf; }
+  void operator=(LHAPDF::PDF* pdf) noexcept { this->pdf = pdf; }
+  wrap operator->() const noexcept { return { pdf }; }
+} pdf;
+std::mutex guarded_pdf::wrap::guard;
+*/
 
 std::vector<std::function<double(const entry&)>> scale_fcns;
 std::vector<unsigned> scales_fac, scales_ren;
@@ -101,14 +92,6 @@ class reweighter : entry { // thread instance for an entry
   struct ren_vars { double ar, w0; };
   std::vector<fac_vars> _fac_vars;
   std::vector<ren_vars> _ren_vars;
-
-public:
-  reweighter(TTree& tree, Long64_t cacheSize, LHAPDF::PDF* pdf)
-  : entry(tree,cacheSize), pdf(pdf),
-    scale_values(scale_fcns.size()), new_weights(scales.size()),
-    _fac_vars(scales_fac.size()), _ren_vars(scales_ren.size())
-  { }
-  ~reweighter() { delete pdf; }
 
   double fr1(unsigned r, double muF) const {
     const double x = this->x[r];
@@ -173,6 +156,23 @@ public:
   }
 
 public:
+  reweighter(LHAPDF::PDF* pdf)
+  : pdf(pdf),
+    scale_values(scale_fcns.size()), new_weights(scales.size()),
+    _fac_vars(scales_fac.size()), _ren_vars(scales_ren.size())
+  { }
+  reweighter(const reweighter& o) = delete;
+  reweighter(reweighter&& o)
+  : pdf(o.pdf),
+    scale_values(std::move(o.scale_values)), new_weights(std::move(o.new_weights)),
+    _fac_vars(std::move(o._fac_vars)), _ren_vars(std::move(o._ren_vars))
+  { o.pdf = nullptr; }
+
+  ~reweighter() { delete pdf; }
+  inline void refresh() noexcept {
+    memcpy(static_cast<entry*>(this),&entry::current,sizeof(entry));
+  }
+
   void operator()() {
     for (unsigned i=0; i<scale_fcns.size(); ++i)
       scale_values[i] = scale_fcns[i](*this);
@@ -208,6 +208,32 @@ public:
   inline double operator[](unsigned i) const { return new_weights[i]; }
 };
 
+class thread_loop {
+  TTree *tree;
+  ivanp::timed_counter<Long64_t> &cnt;
+  reweighter rew;
+
+  static std::mutex read_mx;
+
+public:
+  thread_loop(TTree* tree, decltype(cnt) cnt)
+  : tree(tree), cnt(cnt), rew(LHAPDF::mkPDF("CT10nlo",0)) { }
+
+  void operator()() {
+    for ( ; ; ) {
+      { std::lock_guard<std::mutex> lock(read_mx);
+        if (!cnt) break;
+        tree->GetEntry(cnt++);
+        rew.refresh();
+      }
+      rew();
+    }
+  }
+  thread_loop(thread_loop&& o)
+  : tree(o.tree), cnt(o.cnt), rew(std::move(o.rew)) { };
+};
+std::mutex thread_loop::read_mx;
+
 double Ht_Higgs(const entry& e) noexcept {
   double _Ht = 0.;
   for (Int_t i=0; i<e.nparticle; ++i) {
@@ -218,11 +244,21 @@ double Ht_Higgs(const entry& e) noexcept {
   return _Ht;
 }
 
+
+template <typename T>
+void branch(TChain& chain, const char* name, T* addr) {
+  chain.SetBranchStatus (name, true);
+  chain.SetBranchAddress(name, addr);
+  chain.AddBranchToCache(name, true);
+}
+
 int main(int argc, char* argv[]) {
   if (argc==1) {
     cout << "usage: " << argv[0] << " input.root ..." << endl;
     return 0;
   }
+
+  // pdf = LHAPDF::mkPDF("CT10nlo",0);
 
   // Open input ntuples root file ===================================
   TChain chain("t3");
@@ -231,6 +267,30 @@ int main(int argc, char* argv[]) {
     cout << "  " << argv[i] << endl;
     if (!chain.Add(argv[i],0)) return 1;
   }
+  chain.SetCacheSize(sq(1024)/4);
+  cout << endl;
+
+  chain.SetBranchStatus("*",0);
+  branch(chain, "nparticle",    &entry::current.nparticle);
+  branch(chain, "px",            entry::current.px);
+  branch(chain, "py",            entry::current.py);
+  branch(chain, "kf",            entry::current.kf);
+  branch(chain, "alphas",       &entry::current.alphas);
+  branch(chain, "weight2",      &entry::current.weight2);
+  branch(chain, "me_wgt",       &entry::current.me_wgt);
+  branch(chain, "me_wgt2",      &entry::current.me_wgt2);
+  branch(chain, "x1",           &entry::current.x[0]);
+  branch(chain, "x2",           &entry::current.x[1]);
+  branch(chain, "x1p",          &entry::current.xp[0]);
+  branch(chain, "x2p",          &entry::current.xp[1]);
+  branch(chain, "id1",          &entry::current.id[0]);
+  branch(chain, "id2",          &entry::current.id[1]);
+  branch(chain, "fac_scale",    &entry::current.fac_scale);
+  branch(chain, "ren_scale",    &entry::current.ren_scale);
+  branch(chain, "usr_wgts",      entry::current.usr_wgts);
+  branch(chain, "alphasPower",  &entry::current.alphas_power);
+  branch(chain, "part",          entry::current.part);
+  chain.StopCacheLearningPhase();
 
   for (double x : {0.05,0.07,0.10,0.12,0.15,0.20, 0.25,0.3,0.4,0.5})
     scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
@@ -241,20 +301,33 @@ int main(int argc, char* argv[]) {
     for (unsigned r=0; r<scales_ren.size(); ++r)
       scales.emplace_back(f,r);
 
-  reweighter rew(chain,(1<<19),LHAPDF::mkPDF("CT10nlo",0));
+/*
+  reweighter rew;
 
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
-  // for (tc ent(chain.GetEntries()); !!ent; ++ent) {
-  for (tc ent(100'000); !!ent; ++ent) {
+  for (tc ent(chain.GetEntries()); ent < 6; ++ent) {
     chain.GetEntry(ent);
-    // cout << endl;
+    cout << endl;
 
+    rew.refresh();
     rew();
 
     // test( rew[0] )
   }
+*/
 
+  // ivanp::timed_counter<Long64_t> cnt(chain.GetEntries());
+  std::vector<std::thread> threads;
+  threads.reserve(1);
+  ivanp::timed_counter<Long64_t> cnt(10'000);
+  for (unsigned i=1; i; --i)
+    threads.emplace_back(thread_loop(&chain,cnt));
+
+  // join threads so that program doesn't quit before they are done
+  for (auto& thread : threads) thread.join();
+
+  // delete pdf;
   return 0;
 }
 

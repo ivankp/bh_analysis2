@@ -35,8 +35,10 @@ LHAPDF_LIBS   := $(shell lhapdf-config --ldflags)
 C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
-C_reweigh := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
+C_reweigh := $(ROOT_CFLAGS)
 L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
+
+C_reweighter := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 
 C_reweigh1 := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
@@ -80,6 +82,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 endif
 
 $(HISTS): $(BLD)/re_axes.o
+$(BIN)/reweigh: $(BLD)/reweighter.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@

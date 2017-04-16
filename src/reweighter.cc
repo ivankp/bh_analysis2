@@ -8,13 +8,6 @@ constexpr std::array<int,10> quarks {
   1,-1, 2,-2, 3,-3, 4,-4, 5,-5
 };
 
-template <typename T>
-void branch(TTree& tree, const char* name, T* addr) {
-  tree.SetBranchStatus (name, true);
-  tree.SetBranchAddress(name, addr);
-  tree.AddBranchToCache(name, true);
-}
-
 entry::entry(TTree& tree, Long64_t cacheSize) {
   tree.SetCacheSize(cacheSize);
   tree.SetBranchStatus("*",0);

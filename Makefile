@@ -25,15 +25,21 @@ ROOT_CFLAGS := -Wno-deprecated-declarations -pthread -m64
 ROOT_CFLAGS += -I$(shell root-config --incdir)
 ROOT_LIBS   := $(shell root-config --libs)
 
+# RPATH
+rpath_script := ldd `root-config --libdir`/libTreePlayer.so \
+  | sed -n 's/.*=> \(.*\)\/.\+\.so[^ ]* (.*/\1/p' \
+  | sort | uniq \
+  | sed '/^\/lib/d;/^\/usr\/lib/d' \
+  | sed 's/^/-Wl,-rpath=/'
+ROOT_LIBS += $(shell $(rpath_script))
+
 FJ_DIR    := $(shell fastjet-config --prefix)
 FJ_CFLAGS := -I$(FJ_DIR)/include
-FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet
+FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet -Wl,-rpath=$(FJ_DIR)/lib
 
+LHAPDF_DIR    := $(shell fastjet-config --prefix)
 LHAPDF_CFLAGS := $(shell lhapdf-config --cppflags)
-LHAPDF_LIBS   := $(shell lhapdf-config --ldflags)
-
-C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+LHAPDF_LIBS   := $(shell lhapdf-config --ldflags) -Wl,-rpath=$(LHAPDF_DIR)/lib
 
 C_reweigh := $(ROOT_CFLAGS)
 L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
@@ -45,6 +51,12 @@ L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
 
 C_reweigh_threaded := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 L_reweigh_threaded := $(ROOT_LIBS) $(LHAPDF_LIBS)
+
+C_scale_dep := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_scale_dep := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
+
+C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
 C_hist_Hjets_mtop := $(C_hist_Hjets)
 L_hist_Hjets_mtop := $(L_hist_Hjets)
@@ -82,7 +94,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 endif
 
 $(HISTS): $(BLD)/re_axes.o
-$(BIN)/reweigh: $(BLD)/reweighter.o
+$(BIN)/reweigh $(BIN)/scale_dep: $(BLD)/reweighter.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@

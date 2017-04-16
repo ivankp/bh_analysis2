@@ -5,6 +5,13 @@
 
 #include <TTree.h>
 
+template <typename T>
+void branch(TTree& tree, const char* name, T* addr) {
+  tree.SetBranchStatus (name, true);
+  tree.SetBranchAddress(name, addr);
+  tree.AddBranchToCache(name, true);
+}
+
 struct entry {
   Int_t           nparticle;
   Float_t         px[8]; //[nparticle]

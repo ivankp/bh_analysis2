@@ -19,20 +19,15 @@ Queue
 
 # print condor('scale_dep_H2j_V',['~/disk2/links/H2j/H2.0j_GGFHT_V_6500_pt25.0_eta4.5_r100_1{1..5}*.root'])
 
-for P in ['B','RS','I']:
-  basename = 'scale_dep_H2j_%s' % P
-  print basename
-  cf = out+basename+'.condor'
-  f = open(cf,'w')
-  f.write(condor(basename,
-      glob.glob('/msu/data/t3work4/luisonig/H2jets_ggf/NTuplesFiles/H2.0j_GGFHT_%s_6500_pt25.0_eta4.5_r100_%s.root' % (
-        P, '100' if P!='V' else '1[0-4][0-9]' ))))
-  f.close()
-  # print cmd
-  subprocess.Popen('condor_submit '+cf, shell=True)
-
-# for P in ['B', 'RS', 'I', 'V']:
-
-# echo "
-# " | condor_submit - > /dev/null
+for Nj in [1,2,3]:
+  for P in ['B','RS','I','V']:
+    basename = 'H{0}j_8TeV_CT10nlo_antikt4_jetpt50_{1}'.format(Nj,P)
+    print basename
+    cf = out+'/'+basename+'.condor'
+    f = open(cf,'w')
+    f.write(condor(basename,
+        glob.glob('/msu/data/t3work4/luisonig/H{0}jets_ggf/NTuplesFiles/H{0}.0j_GGFHT_{1}_4000_pt25.0_eta4.5_r100_{2}.root'.format(
+          Nj, P, '100' if (P!='V' or Nj==1) else ( '1[0-4][0-9]' if Nj==2 else '1[0-9][0-9]' ) ))))
+    f.close()
+    subprocess.Popen('condor_submit '+cf, shell=True)
 

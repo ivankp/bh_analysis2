@@ -32,12 +32,11 @@ namespace fj = fastjet;
 
 struct ww2 {
   double wtmp = 0., w = 0., w2 = 0.;
-  ww2& operator+=(double x) noexcept { wtmp += x; return *this; }
-  ww2& operator+() {
+  inline void operator+=(double x) noexcept { wtmp += x; }
+  void join() noexcept {
     w += wtmp;
     w2 += wtmp*wtmp;
     wtmp = 0.;
-    return *this;
   }
 };
 
@@ -160,8 +159,8 @@ int main(int argc, char* argv[]) {
     if (prev_id != current_id) {
       ncount_total += (_ncount ? **_ncount : 1);
       ++num_events_total;
-      for (auto& w : total_weight) +w;
-      for (auto& w : selected_weight) +w;
+      for (auto& w : total_weight) w.join();
+      for (auto& w : selected_weight) w.join();
     }
     // --------------------------------------------------------------
 
@@ -199,9 +198,11 @@ int main(int argc, char* argv[]) {
     }
     // --------------------------------------------------------------
 
-    for (unsigned i=0; i<nw; ++i) selected_weight[i] += this_weight[i];
+    for (auto i=nw; i;) { --i; selected_weight[i] += this_weight[i]; }
 
   } // END EVENT LOOP
+  for (auto& w : total_weight) w.join();
+  for (auto& w : selected_weight) w.join();
   // ================================================================
 
   cout << "\nNumbers" << endl;
@@ -211,26 +212,29 @@ int main(int argc, char* argv[]) {
   printf("%-11s %11lu  %11lu\n","num_entries",num_entries_total,num_entries_selected);
 
   cout << "\nWeights" << endl;
-  printf("%-30s %-13s %-13s %-13s %-13s\n",
+  printf("%-30s %-14s %-14s %-14s %-14s\n",
          "","total","sumw2","selected","sumw2");
   for (unsigned i=0; i<nw; ++i) printf(
-    "%-30s %13.7e %13.7e %13.7e %13.7e\n",
+    "%-30s %14.8e %14.8e %14.8e %14.8e\n",
     _weights[i].GetBranchName(),
     total_weight[i].w, total_weight[i].w2,
     selected_weight[i].w, selected_weight[i].w2
   );
 
   cout << "\nCross sections" << endl;
-  printf("%-30s %-13s %-13s %-13s %-13s\n",
+  printf("%-30s %-14s %-14s %-14s %-14s\n",
          "","total","unc","selected","unc");
-  for (unsigned i=0; i<nw; ++i) printf(
-    "%-30s %13.7e %13.7e %13.7e %13.7e\n",
-    _weights[i].GetBranchName(),
-    total_weight[i].w/ncount_total,
-    std::sqrt(total_weight[i].w2)/ncount_total,
-    selected_weight[i].w/ncount_total,
-    std::sqrt(selected_weight[i].w2)/ncount_total
-  );
+  for (unsigned i=0; i<nw; ++i) {
+    const double xsec = selected_weight[i].w/ncount_total;
+    const double unc  = std::sqrt(selected_weight[i].w2)/ncount_total;
+    printf(
+      "%-30s %14.8e %14.8e %14.8e %14.8e %8.5f%%\n",
+      _weights[i].GetBranchName(),
+      total_weight[i].w/ncount_total,
+      std::sqrt(total_weight[i].w2)/ncount_total,
+      xsec, unc, (100.*unc/xsec)
+    );
+  }
   cout << endl;
 
   return 0;

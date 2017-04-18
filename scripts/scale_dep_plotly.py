@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os, sys
 
 try:
@@ -27,17 +29,17 @@ import plotly.graph_objs as go
 for name in need:
     print name
     data = [ [ float(x) for x in line.split() ] for line in open(name+'_NLO.dat','r') ]
-    x = [ math.log(p[0],2) for p in data ]
-    y = [ math.log(p[1],2) for p in data ]
+    x = [ math.log(p[0],2) for p in data if p[2]>0 ]
+    y = [ math.log(p[1],2) for p in data if p[2]>0 ]
     # x = [ p[0] for p in data ]
     # y = [ p[1] for p in data ]
-    z = [ p[2] for p in data ]
+    z = [ p[2] for p in data if p[2]>0 ]
 
     trace1 = go.Scatter3d(
         x=x, y=y, z=z,
         mode='markers',
         marker=dict(
-            size=10,
+            size=8,
             color=z,             # set color to an array/list of desired values
             colorscale='Viridis' # choose a colorscale
             # opacity=0.8

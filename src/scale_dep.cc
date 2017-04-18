@@ -36,18 +36,16 @@ double Ht_Higgs(const entry& e) noexcept {
   return _Ht;
 }
 
-struct weight_collector {
-  // unsigned n = 0;
+struct ww2 {
   double wtmp = 0., w = 0., w2 = 0.;
-  void operator+=(double x) noexcept { wtmp += x; }
+  inline void operator+=(double x) noexcept { wtmp += x; }
   void join() noexcept {
     w += wtmp;
-    w2 += sq(wtmp);
+    w2 += wtmp*wtmp;
     wtmp = 0.;
   }
 };
-
-std::ostream& operator<<(std::ostream &os, const weight_collector& wc) {
+std::ostream& operator<<(std::ostream &os, const ww2& wc) {
   os << setw(16) << wc.w << setw(15) << wc.w2 << '\n';
   return os;
 }
@@ -78,7 +76,12 @@ int main(int argc, char* argv[]) {
   // sd.scales_fac = {0,1,2,3,4,5,6,7,8,9,10};
   // sd.scales_ren = {0,1,11,12,13,14,3,15,16};
 
-  std::vector<double> Ht_fracs {1./8., 1./6., 1./4., 1./3., 1./2., 1., 2., 3., 4., 6., 8.};
+  std::vector<double> Ht_fracs
+    // {1,2,3,4,6,8,12,16};
+    {1.,0.5,0.25};
+  // for (double x : Ht_fracs) Ht_fracs.push_back(1./x);
+  std::sort(Ht_fracs.begin(),Ht_fracs.end());
+
   for (double x : Ht_fracs) {
     static unsigned i = 0;
     sd.scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
@@ -104,7 +107,7 @@ int main(int argc, char* argv[]) {
   fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
 
   // weight_collector nom;
-  std::vector<weight_collector> scales_weights(sd.scales.size());
+  std::vector<ww2> scales_weights(sd.scales.size());
 
   const entry& e = *reinterpret_cast<const entry*>(&rew);
   std::vector<fj::PseudoJet> particles;
@@ -120,6 +123,7 @@ int main(int argc, char* argv[]) {
     if (new_event) {
       ++n_events_total;
       prev_id = event_id;
+      for (auto& w : scales_weights) w.join();
     }
 
     // Read particles -----------------------------------------------
@@ -148,12 +152,9 @@ int main(int argc, char* argv[]) {
     rew();
 
     // nom += weight;
-    for (auto i=sd.scales.size(); i;) { --i;
-      scales_weights[i] += rew[i];
-      if (new_event) scales_weights[i].join();
-    }
+    for (auto i=sd.scales.size(); i;) { --i; scales_weights[i] += rew[i]; }
   }
-  for (auto& sw : scales_weights) sw.join();
+  for (auto& w : scales_weights) w.join();
 
   std::ofstream fout(argv[1]);
   if (!fout) {

@@ -50,8 +50,8 @@ for name in need:
     layout = go.Layout(
         title=name,
         scene=go.Scene(
-            xaxis=go.XAxis(title='log2 fac [HT\']'),#type='log'),
-            yaxis=go.YAxis(title='log2 ren [HT\']'),#type='log'),
+            xaxis=go.XAxis(title='log2 fac [HT\'\']'),#type='log'),
+            yaxis=go.YAxis(title='log2 ren [HT\'\']'),#type='log'),
             zaxis=go.ZAxis(title='xsec [pb]')
         )
     )

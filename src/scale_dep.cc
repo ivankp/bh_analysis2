@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <fstream>
-// #include <stdexcept>
 
 #include <TChain.h>
 
@@ -10,8 +9,8 @@
 
 #include "math.hh"
 #include "timed_counter.hh"
+#include "parse_args.hh"
 #include "reweighter.hh"
-// #include "catstr.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -26,7 +25,7 @@ namespace fj = fastjet;
 // using ivanp::cat;
 using namespace ivanp::math;
 
-double Ht_Higgs(const entry& e) noexcept {
+double HThp(const entry& e) noexcept {
   double _Ht = 0.;
   for (Int_t i=0; i<e.nparticle; ++i) {
     double pt2 = sq(e.px[i],e.py[i]);
@@ -34,6 +33,13 @@ double Ht_Higgs(const entry& e) noexcept {
     _Ht += std::sqrt(pt2);
   }
   return _Ht;
+}
+
+double HThpp(const entry& e) noexcept {
+  double _Ht = 0.;
+  for (Int_t i=0; i<e.nparticle; ++i)
+    _Ht += std::sqrt(sq(e.px[i],e.py[i]));
+  return (0.5*_Ht) + 125.;
 }
 
 struct ww2 {
@@ -51,17 +57,46 @@ std::ostream& operator<<(std::ostream &os, const ww2& wc) {
 }
 
 int main(int argc, char* argv[]) {
-  if (argc==1) {
-    cout << "usage: " << argv[0] << " out.txt in.root ..." << endl;
-    return 0;
+  // parse program arguments ========================================
+  const char* dat = nullptr;
+  std::vector<const char*> ntuples;
+  fj::JetDefinition jet_def;
+  unsigned need_njets = 0;
+  double pt_cut = 30.;
+
+  for (int i=1; i<argc; ++i) {
+    using namespace parse;
+    if (root_file_name(argv[i],ntuples)) continue;
+    if (output_dat_file_name(argv[i],dat)) continue;
+    if (num_jets(argv[i],need_njets)) continue;
+    if (jet_pt_cut(argv[i],pt_cut)) continue;
+    if (jetdef(argv[i],jet_def)) continue;
+
+    cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
+    return 1;
   }
+  if (!ntuples.size()) {
+    cerr << "\033[31mNo input root files provided\033[0m" << endl;
+    return 1;
+  }
+  if (!dat) {
+    cerr << "\033[31mNo output file provided\033[0m" << endl;
+    return 1;
+  }
+  if (!need_njets) {
+    cerr << "\033[31mNumber of jets is not specified\033[0m" << endl;
+    return 1;
+  }
+  if (jet_def.jet_algorithm() == fj::undefined_jet_algorithm)
+    jet_def = fj::JetDefinition(fj::antikt_algorithm,0.4);
+  // ================================================================
 
   // Open input ntuples root file ===================================
   TChain chain("t3");
   cout << "\033[36mInput ntuples\033[0m:" << endl;
-  for (int i=2; i<argc; ++i) {
-    cout << "  " << argv[i] << endl;
-    if (!chain.Add(argv[i],0)) return 1;
+  for (const char* f : ntuples) {
+    cout << "  " << f << endl;
+    if (!chain.Add(f,0)) return 1;
   }
 
   scale_defs sd;
@@ -71,20 +106,18 @@ int main(int argc, char* argv[]) {
   //   0.28, 0.26, 0.24, 0.22, 0.18, 0.16
   // };
   // for (double x : Ht_fracs) {
-  //   sd.scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
+  //   sd.scale_fcns.emplace_back([x](const entry& e){ return HThp(e)*x; });
   // }
   // sd.scales_fac = {0,1,2,3,4,5,6,7,8,9,10};
   // sd.scales_ren = {0,1,11,12,13,14,3,15,16};
 
-  std::vector<double> Ht_fracs
-    // {1,2,3,4,6,8,12,16};
-    {1.,0.5,0.25};
-  // for (double x : Ht_fracs) Ht_fracs.push_back(1./x);
+  std::vector<double> Ht_fracs {1,2,3,4,6,8,12,16};
+  for (double x : Ht_fracs) Ht_fracs.push_back(1./x);
   std::sort(Ht_fracs.begin(),Ht_fracs.end());
 
   for (double x : Ht_fracs) {
     static unsigned i = 0;
-    sd.scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
+    sd.scale_fcns.emplace_back([x](const entry& e){ return HThpp(e)*x; });
     sd.scales_fac.emplace_back(i);
     sd.scales_ren.emplace_back(i);
     ++i;
@@ -104,15 +137,19 @@ int main(int argc, char* argv[]) {
   branch(chain, "pz", pz);
   branch(chain, "E", E);
 
-  fj::JetDefinition jet_def(fj::antikt_algorithm,0.4);
-
-  // weight_collector nom;
   std::vector<ww2> scales_weights(sd.scales.size());
 
   const entry& e = *reinterpret_cast<const entry*>(&rew);
   std::vector<fj::PseudoJet> particles;
 
   unsigned n_events_total = 0, n_events_selected = 0;
+
+  fastjet::ClusterSequence::print_banner(); // get it out of the way
+  cout << jet_def.description() << endl;
+  cout << "Expecting \033[36m" << need_njets
+       << "\033[0m or more jets per event\n";
+  test(pt_cut)
+  cout << endl;
 
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
@@ -136,7 +173,7 @@ int main(int argc, char* argv[]) {
 
     // Cluster jets -------------------------------------------------
     auto fj_jets = fj::ClusterSequence(particles,jet_def) // cluster
-      .inclusive_jets(30.); // apply pT cut
+      .inclusive_jets(pt_cut); // apply pT cut
     // resulting number of jets
     unsigned njets = fj_jets.size();
     // apply eta cut
@@ -145,20 +182,19 @@ int main(int argc, char* argv[]) {
     // --------------------------------------------------------------
 
     // Apply event cuts ---------------------------------------------
-    if (njets < 2) continue; // at least needed number of jets
+    if (njets < need_njets) continue; // at least needed number of jets
     if (new_event) ++n_events_selected;
     // --------------------------------------------------------------
 
     rew();
 
-    // nom += weight;
     for (auto i=sd.scales.size(); i;) { --i; scales_weights[i] += rew[i]; }
   }
   for (auto& w : scales_weights) w.join();
 
-  std::ofstream fout(argv[1]);
+  std::ofstream fout(dat);
   if (!fout) {
-    cerr << "cannot open output file " << argv[1] << endl;
+    cerr << "cannot open output file " << dat << endl;
     return 1;
   }
 

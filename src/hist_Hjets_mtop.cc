@@ -292,6 +292,16 @@ int main(int argc, char* argv[]) {
   jjpT_h_(dphi)  jjfb_h_(dphi)
   jjpT_h_(mass)  jjfb_h_(mass)
 
+  auto h_jet_pT_gg = reserve<re_hist<1>>(njmax);
+  auto h_jet_pT_gq = reserve<re_hist<1>>(njmax);
+  auto h_jet_pT_qq = reserve<re_hist<1>>(njmax);
+  for (unsigned i=0; i<njmax; ++i) {
+    const auto name = cat("jet",i+1,"_pT");
+    h_jet_pT_gg.emplace_back("gg_"+name,ra[name]);
+    h_jet_pT_gq.emplace_back("gq_"+name,ra[name]);
+    h_jet_pT_qq.emplace_back("qq_"+name,ra[name]);
+  }
+
 #define j_h_(name) \
   optional<re_hist<1>> h_##name; \
   if (need_njets >= 1) h_##name.emplace(#name,ra[#name]);
@@ -462,6 +472,8 @@ int main(int argc, char* argv[]) {
 
     double H_y = higgs->Rapidity();
     double H_phi = higgs->Phi();
+
+    const auto isp = get_isp(*_id1, *_id2);
     // --------------------------------------------------------------
 
     ++num_selected;
@@ -485,11 +497,19 @@ int main(int argc, char* argv[]) {
 
     // jet histograms ...............................................
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
-      h_jet_pT  [i](jets[i].pT  );
+      const auto jet_pT = jets[i].pT;
+      h_jet_pT  [i](jet_pT  );
       h_jet_y   [i](jets[i].y   );
       h_jet_eta [i](jets[i].eta );
       h_jet_phi [i](jets[i].phi );
       h_jet_mass[i](jets[i].mass);
+
+      switch (isp) {
+        case gg: h_jet_pT_gg[i](jet_pT); break;
+        case gq: h_jet_pT_gq[i](jet_pT); break;
+        case qq: h_jet_pT_qq[i](jet_pT); break;
+        default: ;
+      }
     }
     // ..............................................................
 
@@ -515,8 +535,6 @@ int main(int argc, char* argv[]) {
       // ..............................................................
 
       (*h_maxdy_maxdphi_HT)(max_dy,max_dphi,HT);
-
-      const auto isp = get_isp(*_id1, *_id2);
 
       // HT fractions .................................................
       std::vector<double> frac_HT(njmax+1);

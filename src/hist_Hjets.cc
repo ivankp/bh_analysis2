@@ -29,6 +29,7 @@
 #include "binner_root.hh"
 #include "re_axes.hh"
 #include "parse_args.hh"
+#include "nlo_multibin.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -67,80 +68,15 @@ struct dijet {
     mass(p.M()) {}
 };
 
-struct hist_bin {
-  static std::vector<double> weights;
-  static unsigned wi;
-  static int current_id;
-  struct bin {
-    int id = 0;
-    double wtmp = 0, w = 0, w2 = 0;
-    size_t n = 0;
-  };
-  std::vector<bin> bins;
-  hist_bin(): bins(weights.size()) { }
-
-  inline hist_bin& operator++() noexcept {
-    for (unsigned i=weights.size(); i!=0; ) {
-      --i;
-      const double weight = weights[i];
-      bin& b = bins[i];
-      if (b.id == current_id) b.wtmp += weight;
-      else {
-        b.id = current_id;
-        b.w2 += b.wtmp*b.wtmp;
-        b.wtmp = weight;
-      }
-      b.w += weight;
-      ++b.n;
-    }
-    return *this;
-  }
-  inline hist_bin& operator+=(const hist_bin& rhs) noexcept {
-    for (unsigned i=weights.size(); i!=0; ) {
-      --i;
-      const bin& br = rhs.bins[i];
-      bin& bl = bins[i];
-      bl.wtmp += br.wtmp;
-      bl.w += br.w;
-      bl.w2 += br.w2;
-      bl.n += br.n;
-    }
-    return *this;
-  }
-};
-std::vector<double> hist_bin::weights;
-unsigned hist_bin::wi;
-int hist_bin::current_id;
-
-namespace ivanp { namespace root {
-template <> class bin_converter<hist_bin> {
-  inline const auto& get(const hist_bin& bin) const noexcept {
-    return bin.bins[hist_bin::wi];
-  }
-public:
-  inline auto weight(const hist_bin& b) const noexcept {
-    auto _b = get(b);
-    return _b.w + _b.wtmp;
-  }
-  inline auto sumw2(const hist_bin& b) const noexcept {
-    auto _b = get(b);
-    return _b.w2 + sq(_b.wtmp);
-  }
-  inline auto num(const hist_bin& b) const noexcept {
-    return get(b).n;
-  }
-};
-}}
-
 template <typename... Axes>
-using hist_t = ivanp::binner<hist_bin,
+using hist_t = ivanp::binner<nlo_multibin,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<hist_bin, std::tuple<
+using re_hist = ivanp::binner<nlo_multibin, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 int main(int argc, char* argv[]) {
@@ -239,7 +175,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  hist_bin::weights.resize(_weights.size());
+  nlo_multibin::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
@@ -302,13 +238,13 @@ int main(int argc, char* argv[]) {
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; hist_bin::weights[i] = *_weights[i];
+      --i; nlo_multibin::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
-    hist_bin::current_id = *_id;
-    if (prev_id != hist_bin::current_id) {
-      prev_id = hist_bin::current_id;
+    nlo_multibin::current_id = *_id;
+    if (prev_id != nlo_multibin::current_id) {
+      prev_id = nlo_multibin::current_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
@@ -457,7 +393,7 @@ int main(int argc, char* argv[]) {
   if (fout->IsZombie()) return 1;
 
   // write root historgrams
-  hist_bin::wi = 0;
+  nlo_multibin::wi = 0;
   for (const auto& _w : _weights) {
     auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -478,7 +414,7 @@ int main(int argc, char* argv[]) {
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-    ++hist_bin::wi;
+    ++nlo_multibin::wi;
   }
 
   fout->cd();

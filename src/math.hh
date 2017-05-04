@@ -22,6 +22,11 @@ inline T dphi(T phi1, T phi2) noexcept {
   return ( __builtin_expect(_dphi > M_PI,0) ? twopi-_dphi : _dphi );
 }
 
+template <typename T> [[ gnu::const ]]
+inline T deltaR(T eta1, T eta2, T phi1, T phi2) noexcept {
+  return std::sqrt(sq(eta1-eta2,dphi(phi1,phi2)));
+}
+
 template <typename T1, typename T2>
 inline void smaller(T1& x, const T2& y) noexcept { if (y < x) x = y; }
 template <typename T1, typename T2>

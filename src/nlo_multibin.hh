@@ -2,16 +2,14 @@
 #define NLO_MULTIBIN_HH
 
 #include <vector>
+#include "multibin.hh"
 
-struct nlo_multibin {
-  static std::vector<double> weights;
-  static unsigned wi;
-  static int current_id;
+struct nlo_multibin: public multibin {
   struct bin {
     int id = 0;
     double wtmp = 0, w = 0, w2 = 0;
-    size_t n = 0;
   };
+  size_t n = 0;
   std::vector<bin> bins;
   nlo_multibin(): bins(weights.size()) { }
 
@@ -27,8 +25,8 @@ struct nlo_multibin {
         b.wtmp = weight;
       }
       b.w += weight;
-      ++b.n;
     }
+    ++n;
     return *this;
   }
   inline nlo_multibin& operator+=(const nlo_multibin& rhs) noexcept {
@@ -39,14 +37,11 @@ struct nlo_multibin {
       bl.wtmp += br.wtmp;
       bl.w += br.w;
       bl.w2 += br.w2;
-      bl.n += br.n;
     }
+    n += rhs.n;
     return *this;
   }
 };
-std::vector<double> nlo_multibin::weights;
-unsigned nlo_multibin::wi;
-int nlo_multibin::current_id;
 
 namespace ivanp { namespace root {
 template <> class bin_converter<nlo_multibin> {
@@ -63,7 +58,7 @@ public:
     return _b.w2 + _b.wtmp*_b.wtmp;
   }
   inline auto num(const nlo_multibin& b) const noexcept {
-    return get(b).n;
+    return b.n;
   }
 };
 }}

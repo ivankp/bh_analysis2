@@ -61,6 +61,9 @@ L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 C_hist_Hjets_mtop := $(C_hist_Hjets)
 L_hist_Hjets_mtop := $(L_hist_Hjets)
 
+C_hist_Hjets_isolation := $(C_hist_Hjets)
+L_hist_Hjets_isolation := $(L_hist_Hjets)
+
 C_hist_example := $(C_hist_Hjets)
 L_hist_example := $(L_hist_Hjets)
 

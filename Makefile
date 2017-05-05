@@ -73,6 +73,10 @@ L_njets_test := $(L_hist_Hjets)
 C_xsec_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_xsec_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
+C_Higgs2diphoton := $(ROOT_CFLAGS)
+C_test_H2AA := $(ROOT_CFLAGS)
+L_test_H2AA := $(ROOT_LIBS)
+
 SRC := src
 BIN := bin
 BLD := .build
@@ -98,6 +102,7 @@ endif
 
 $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/scale_dep: $(BLD)/reweighter.o
+$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation: $(BLD)/Higgs2diphoton.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
 	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@

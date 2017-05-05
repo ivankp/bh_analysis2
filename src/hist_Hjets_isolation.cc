@@ -31,6 +31,7 @@
 #include "parse_args.hh"
 #include "lo_multibin.hh"
 #include "lo_profile_multibin.hh"
+#include "Higgs2diphoton.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -195,6 +196,8 @@ int main(int argc, char* argv[]) {
 #define h_(name) re_hist<1> h_##name(#name,ra[#name]);
 #define p_(name) re_prof<1> p_##name(#name,ra[#name]);
 
+  h_(cts)
+
   a_(dR)
 
   h_(H_jet_dR_min)
@@ -247,6 +250,59 @@ int main(int argc, char* argv[]) {
 
   p_(Hjets_mass)
 
+  using hist_dR = ivanp::binner<lo_multibin, std::tuple<
+    ivanp::axis_spec<re_axis,true,true>,
+    ivanp::axis_spec<ivanp::container_axis<std::array<double,3>>,false,true>
+    // ivanp::axis_spec<ivanp::container_axis<std::vector<double>>,false,true>
+  >>;
+  const ivanp::container_axis<std::array<double,3>> wide_dR {{ 0, 0.2, 0.4 }};
+  // ivanp::container_axis<std::vector<double>> wide_dR {{ 0, 0.2, 0.4 }};
+
+#define h_dR_(name) hist_dR h_##name##_dR(#name"_dR",ra[#name],wide_dR);
+
+  h_dR_(HT) h_dR_(H_pT) h_dR_(H_y) h_dR_(H_eta) h_dR_(H_phi)
+
+  auto h_jet_pT_dR   = reserve<hist_dR>(njmax);
+  auto h_jet_y_dR    = reserve<hist_dR>(njmax);
+  auto h_jet_eta_dR  = reserve<hist_dR>(njmax);
+  auto h_jet_phi_dR  = reserve<hist_dR>(njmax);
+
+  for (unsigned i=0; i<njmax; ++i) {
+    auto name = cat("jet",i+1,"_pT");
+    h_jet_pT_dR.emplace_back(name,ra[name],wide_dR);
+  }
+  for (unsigned i=0; i<njmax; ++i) {
+    auto name = cat("jet",i+1,"_y");
+    h_jet_y_dR.emplace_back(name,a_y,wide_dR);
+  }
+  for (unsigned i=0; i<njmax; ++i) {
+    auto name = cat("jet",i+1,"_eta");
+    h_jet_eta_dR.emplace_back(name,a_y,wide_dR);
+  }
+  for (unsigned i=0; i<njmax; ++i) {
+    auto name = cat("jet",i+1,"_phi");
+    h_jet_phi_dR.emplace_back(name,a_phi,wide_dR);
+  }
+
+#define jjpT_h_dR_(name) \
+  optional<hist_dR> h_jjpT_##name##_dR; \
+  if (need_njets >= 2) { \
+    const char* _name = need_njets > 2 ? "jjpT_"#name : "jj_"#name; \
+    h_jjpT_##name##_dR.emplace( _name, ra[_name], wide_dR ); \
+  }
+#define jjfb_h_dR_(name) \
+  optional<hist_dR> h_jjfb_##name##_dR; \
+  if (need_njets > 2) \
+    h_jjfb_##name##_dR.emplace("jjfb_"#name,ra["jjfb_"#name],wide_dR);
+
+  jjpT_h_dR_(dpT )  jjfb_h_dR_(dpT )
+  jjpT_h_dR_(dy  )  jjfb_h_dR_(dy  )
+  jjpT_h_dR_(deta)  jjfb_h_dR_(deta)
+  jjpT_h_dR_(dphi)  jjfb_h_dR_(dphi)
+  jjpT_h_dR_(mass)  jjfb_h_dR_(mass)
+
+  h_dR_(Hjets_mass)
+
   // ================================================================
 
   std::vector<fj::PseudoJet> particles;
@@ -255,6 +311,8 @@ int main(int argc, char* argv[]) {
   cout << jet_def.description() << endl;
   cout << "Expecting \033[36m" << need_njets
        << "\033[0m or more jets per event\n" << endl;
+
+  Higgs2diphoton Hdecay;
 
   size_t ncount = 0, num_selected = 0;
 
@@ -304,6 +362,7 @@ int main(int argc, char* argv[]) {
 
     // Apply event cuts ---------------------------------------------
     if (njets < need_njets) continue; // at least needed number of jets
+    ++num_selected;
     // --------------------------------------------------------------
 
     // Define variables ---------------------------------------------
@@ -322,35 +381,49 @@ int main(int argc, char* argv[]) {
 
     const double H_y = higgs->Rapidity();
     const double H_phi = higgs->Phi();
+
+    const auto photons = Hdecay(*higgs);
+    const std::array<double,2>
+      ph_y   { photons.first.Rapidity(), photons.first.Rapidity() },
+      ph_phi { photons.first.Phi(),      photons.first.Phi()      };
+
+    const double H_mass = higgs->M();
+    const double cts =
+      std::sinh(photons.first.Eta()-photons.second.Eta())
+      / std::sqrt(1.+sq(H_pT/H_mass)) *
+      photons.first.Pt()*photons.second.Pt()*2 / sq(H_mass);
     // --------------------------------------------------------------
 
-    ++num_selected;
-
+    // Fill histograms ----------------------------------------------
     double min_dR = 1e55;
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
-      const double dR = deltaR(H_y,jets[i].y,H_phi,jets[i].phi);
+      const double dR = std::min(
+        deltaR(ph_y[0],jets[i].y,ph_phi[0],jets[i].phi),
+        deltaR(ph_y[1],jets[i].y,ph_phi[1],jets[i].phi)
+      );
       h_H_jet_dR[i](dR);
       if (dR < min_dR) min_dR = dR;
     }
     h_H_jet_dR_min(min_dR);
 
-    // Fill histograms ----------------------------------------------
-    p_HT(HT,min_dR);
+    h_cts(cts);
 
-    p_H_pT(H_pT,min_dR);
-    p_H_y(H_y,min_dR);
-    p_H_eta(higgs->Eta(),min_dR);
-    p_H_phi(H_phi,min_dR);
+    p_HT(HT,min_dR); h_HT_dR(HT,min_dR);
+
+    p_H_pT(H_pT,min_dR); h_H_pT_dR(H_pT,min_dR);
+    p_H_y(H_y,min_dR); h_H_y_dR(H_y,min_dR);
+    p_H_eta(higgs->Eta(),min_dR); h_H_eta_dR(higgs->Eta(),min_dR);
+    p_H_phi(H_phi,min_dR); h_H_phi_dR(H_phi,min_dR);
 
     // jet histograms
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
-      p_jet_pT  [i](jets[i].pT  ,min_dR);
-      p_jet_y   [i](jets[i].y   ,min_dR);
-      p_jet_eta [i](jets[i].eta ,min_dR);
-      p_jet_phi [i](jets[i].phi ,min_dR);
+      p_jet_pT  [i](jets[i].pT ,min_dR); h_jet_pT_dR [i](jets[i].pT ,min_dR);
+      p_jet_y   [i](jets[i].y  ,min_dR); h_jet_y_dR  [i](jets[i].y  ,min_dR);
+      p_jet_eta [i](jets[i].eta,min_dR); h_jet_eta_dR[i](jets[i].eta,min_dR);
+      p_jet_phi [i](jets[i].phi,min_dR); h_jet_phi_dR[i](jets[i].phi,min_dR);
     }
 
-    p_Hjets_mass(Hjets.M(),min_dR);
+    p_Hjets_mass(Hjets.M(),min_dR); h_Hjets_mass_dR(Hjets.M(),min_dR);
 
     if (njets<2) continue; // 222222222222222222222222222222222222222
 
@@ -362,6 +435,12 @@ int main(int argc, char* argv[]) {
     (*p_jjpT_deta)(jjpT.deta,min_dR);
     (*p_jjpT_dphi)(jjpT.dphi,min_dR);
     (*p_jjpT_mass)(jjpT.mass,min_dR);
+
+    (*h_jjpT_dpT_dR )(jjpT.dpT ,min_dR);
+    (*h_jjpT_dy_dR  )(jjpT.dy  ,min_dR);
+    (*h_jjpT_deta_dR)(jjpT.deta,min_dR);
+    (*h_jjpT_dphi_dR)(jjpT.dphi,min_dR);
+    (*h_jjpT_mass_dR)(jjpT.mass,min_dR);
     // ..............................................................
 
     if (njets<3) continue; // 333333333333333333333333333333333333333
@@ -384,6 +463,12 @@ int main(int argc, char* argv[]) {
     (*p_jjfb_deta)(jjfb.deta,min_dR);
     (*p_jjfb_dphi)(jjfb.dphi,min_dR);
     (*p_jjfb_mass)(jjfb.mass,min_dR);
+
+    (*h_jjfb_dpT_dR )(jjfb.dpT ,min_dR);
+    (*h_jjfb_dy_dR  )(jjfb.dy  ,min_dR);
+    (*h_jjfb_deta_dR)(jjfb.deta,min_dR);
+    (*h_jjfb_dphi_dR)(jjfb.dphi,min_dR);
+    (*h_jjfb_mass_dR)(jjfb.mass,min_dR);
     // ..............................................................
 
   } // END EVENT LOOP
@@ -397,7 +482,7 @@ int main(int argc, char* argv[]) {
   if (fout->IsZombie()) return 1;
 
   // write root historgrams
-  lo_multibin::wi = 0;
+  multibin::wi = 0;
   for (const auto& _w : _weights) {
     auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -422,7 +507,9 @@ int main(int argc, char* argv[]) {
     for (auto& p : re_prof<1>::all) to_root(*p,p.name);
     dir->cd();
 
-    ++lo_multibin::wi;
+    for (auto& h : hist_dR::all) slice_to_root(*h,h.name);
+
+    ++multibin::wi;
   }
 
   fout->cd();

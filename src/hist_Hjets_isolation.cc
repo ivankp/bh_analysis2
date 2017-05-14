@@ -200,10 +200,10 @@ int main(int argc, char* argv[]) {
 
   a_(dR)
 
-  h_(H_jet_dR_min)
-  auto h_H_jet_dR = reserve<re_hist<1>>(njmax);
+  h_(photon_jet_dR_min)
+  auto h_photon_jet_dR = reserve<re_hist<1>>(njmax);
   for (unsigned i=0; i<njmax; ++i) {
-    h_H_jet_dR.emplace_back(cat("H_jet",i+1,"_dR"),a_dR);
+    h_photon_jet_dR.emplace_back(cat("photon_jet",i+1,"_dR"),a_dR);
   }
 
   a_(y) a_(phi)
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
   const ivanp::container_axis<std::array<double,3>> wide_dR {{ 0, 0.2, 0.4 }};
   // ivanp::container_axis<std::vector<double>> wide_dR {{ 0, 0.2, 0.4 }};
 
-#define h_dR_(name) hist_dR h_##name##_dR(#name"_dR",ra[#name],wide_dR);
+#define h_dR_(name) hist_dR h_##name##_dR(#name,ra[#name],wide_dR);
 
   h_dR_(HT) h_dR_(H_pT) h_dR_(H_y) h_dR_(H_eta) h_dR_(H_phi)
 
@@ -322,6 +322,7 @@ int main(int argc, char* argv[]) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
       --i; multibin::weights[i] = *_weights[i];
     }
+    ++ncount;
 
     const size_t np = *_nparticle;
     particles.clear();
@@ -401,10 +402,10 @@ int main(int argc, char* argv[]) {
         deltaR(ph_y[0],jets[i].y,ph_phi[0],jets[i].phi),
         deltaR(ph_y[1],jets[i].y,ph_phi[1],jets[i].phi)
       );
-      h_H_jet_dR[i](dR);
+      h_photon_jet_dR[i](dR);
       if (dR < min_dR) min_dR = dR;
     }
-    h_H_jet_dR_min(min_dR);
+    h_photon_jet_dR_min(min_dR);
 
     h_cts(cts);
 
@@ -507,7 +508,7 @@ int main(int argc, char* argv[]) {
     for (auto& p : re_prof<1>::all) to_root(*p,p.name);
     dir->cd();
 
-    for (auto& h : hist_dR::all) slice_to_root(*h,h.name);
+    for (auto& h : hist_dR::all) slice_to_root(*h,h.name,"dR");
 
     ++multibin::wi;
   }

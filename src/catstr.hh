@@ -7,30 +7,24 @@
 #include <sstream>
 #include <utility>
 
-namespace ivanp {
-
 namespace detail {
 
-template<typename T>
-inline void cat_impl(std::stringstream& ss, T&& t) {
-  ss << std::forward<T>(t);
+template <typename S, typename T>
+inline void cat_impl(S& s, const T& t) { s << t; }
+
+template <typename S, typename T, typename... TT>
+inline void cat_impl(S& s, const T& t, const TT&... tt) {
+  s << t;
+  cat_impl(s,tt...);
 }
 
-template<typename T, typename... TT>
-inline void cat_impl(std::stringstream& ss, T&& t, TT&&... tt) {
-  ss << t;
-  cat_impl(ss,std::forward<TT>(tt)...);
 }
 
-}
-
-template<typename... TT>
-inline std::string cat(TT&&... tt) {
+template <typename... TT>
+inline std::string cat(const TT&... tt) {
   std::stringstream ss;
-  ivanp::detail::cat_impl(ss,std::forward<TT>(tt)...);
+  detail::cat_impl(ss,tt...);
   return ss.str();
-}
-
 }
 
 #endif

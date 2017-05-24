@@ -14,6 +14,8 @@ entry::entry(TTree& tree, Long64_t cacheSize) {
   branch(tree, "nparticle",   &nparticle);
   branch(tree, "px",           px);
   branch(tree, "py",           py);
+  branch(tree, "pz",           pz);
+  branch(tree, "E",            E);
   branch(tree, "kf",           kf);
   branch(tree, "alphas",      &alphas);
   branch(tree, "weight2",     &weight2);

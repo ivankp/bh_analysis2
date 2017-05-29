@@ -12,6 +12,12 @@ constexpr T sq(T x) noexcept { return x*x; }
 template <typename T, typename... TT> [[ gnu::const ]]
 constexpr T sq(T x, TT... xx) noexcept { return sq(x)+sq(xx...); }
 
+constexpr auto prod() noexcept { return 1; }
+template <typename T> [[ gnu::const ]]
+constexpr T prod(T x) noexcept { return x; }
+template <typename T, typename... TT> [[ gnu::const ]]
+constexpr T prod(T x, TT... xx) noexcept { return x*prod(xx...); }
+
 // return absolute value of phi separation
 template <typename T> [[ gnu::const ]]
 inline T dphi(T phi1, T phi2) noexcept {

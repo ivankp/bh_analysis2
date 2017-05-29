@@ -41,6 +41,9 @@ LHAPDF_DIR    := $(shell fastjet-config --prefix)
 LHAPDF_CFLAGS := $(shell lhapdf-config --cppflags)
 LHAPDF_LIBS   := $(shell lhapdf-config --ldflags) -Wl,-rpath=$(LHAPDF_DIR)/lib
 
+C_test_tree := $(ROOT_CFLAGS)
+L_test_tree := $(ROOT_LIBS) -lTreePlayer
+
 C_reweigh := $(ROOT_CFLAGS)
 L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
 

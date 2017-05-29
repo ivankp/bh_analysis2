@@ -31,6 +31,7 @@
 #include "re_axes.hh"
 #include "parse_args.hh"
 #include "string_alg.hh"
+#include "cartesian_product_apply.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -154,6 +155,26 @@ using re_axis = typename re_axes::axis_type;
 template <bool... OF>
 using re_hist = ivanp::binner<hist_bin, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
+
+template <bool... OF>
+struct isp_split {
+  std::vector<re_hist<OF...>> gg, gq, qq;
+  void emplace(const std::string& name, const re_axis& axis) {
+    gg.emplace_back("gg_"+name,axis);
+    gq.emplace_back("gq_"+name,axis);
+    qq.emplace_back("qq_"+name,axis);
+  }
+  template <typename F, typename... I>
+  isp_split(F f, I... i) {
+    const auto n = ivanp::math::prod(i...);
+    gg.reserve(n);
+    gq.reserve(n);
+    qq.reserve(n);
+    ivanp::cartesian_product_apply(
+      [&,this](auto... args){ f(*this,args...); }, // bind first
+      std::make_pair(I{},i)... );
+  }
+};
 
 int main(int argc, char* argv[]) {
   // parse program arguments ========================================
@@ -292,15 +313,21 @@ int main(int argc, char* argv[]) {
   jjpT_h_(dphi)  jjfb_h_(dphi)
   jjpT_h_(mass)  jjfb_h_(mass)
 
-  auto h_jet_pT_gg = reserve<re_hist<1>>(njmax);
-  auto h_jet_pT_gq = reserve<re_hist<1>>(njmax);
-  auto h_jet_pT_qq = reserve<re_hist<1>>(njmax);
-  for (unsigned i=0; i<njmax; ++i) {
-    const auto name = cat("jet",i+1,"_pT");
-    h_jet_pT_gg.emplace_back("gg_"+name,ra[name]);
-    h_jet_pT_gq.emplace_back("gq_"+name,ra[name]);
-    h_jet_pT_qq.emplace_back("qq_"+name,ra[name]);
-  }
+  auto h_H_pT_isp = isp_split<1>(
+    [&](isp_split<1>& hh){ hh.emplace("H_pT",h_H_pT.axis()); });
+
+  auto h_H_y_isp = isp_split<1>(
+    [&](isp_split<1>& hh){ hh.emplace("H_y",h_H_y.axis()); });
+
+  auto h_jet_pT_isp = isp_split<1>(
+    [&](isp_split<1>& hh, unsigned j){
+      hh.emplace( cat("jet",j+1,"_pT"), h_jet_pT[j].axis() );
+    }, njmax);
+
+  auto h_jet_y_isp = isp_split<1>(
+    [&](isp_split<1>& hh, unsigned j){
+      hh.emplace( cat("jet",j+1,"_y"), h_jet_y[j].axis() );
+    }, njmax);
 
 #define j_h_(name) \
   optional<re_hist<1>> h_##name; \
@@ -481,8 +508,8 @@ int main(int argc, char* argv[]) {
     // Fill histograms ----------------------------------------------
     h_HT(HT);
 
-    h_H_pT(H_pT);
-    h_H_y(H_y);
+    const auto bin_H_pT = h_H_pT(H_pT);
+    const auto bin_H_y  = h_H_y(H_y);
     h_H_eta(higgs->Eta());
     h_H_phi(H_phi);
     h_H_mass(higgs->M());
@@ -495,19 +522,37 @@ int main(int argc, char* argv[]) {
     h_hgam_yAbs_yy(std::abs(H_y));
     h_hgam_HT(HT);
 
+    switch (isp) {
+      case gg: h_H_pT_isp.gg.front().fill_bin(bin_H_pT);
+               h_H_y_isp .gg.front().fill_bin(bin_H_y);
+               break;
+      case gq: h_H_pT_isp.gq.front().fill_bin(bin_H_pT);
+               h_H_y_isp .gq.front().fill_bin(bin_H_y);
+               break;
+      case qq: h_H_pT_isp.qq.front().fill_bin(bin_H_pT);
+               h_H_y_isp .qq.front().fill_bin(bin_H_y);
+               break;
+      default: ;
+    }
+
     // jet histograms ...............................................
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
-      const auto jet_pT = jets[i].pT;
-      h_jet_pT  [i](jet_pT  );
-      h_jet_y   [i](jets[i].y   );
+      const auto bin_pT = h_jet_pT  [i](jets[i].pT);
+      const auto bin_y  = h_jet_y   [i](jets[i].y );
       h_jet_eta [i](jets[i].eta );
       h_jet_phi [i](jets[i].phi );
       h_jet_mass[i](jets[i].mass);
 
       switch (isp) {
-        case gg: h_jet_pT_gg[i](jet_pT); break;
-        case gq: h_jet_pT_gq[i](jet_pT); break;
-        case qq: h_jet_pT_qq[i](jet_pT); break;
+        case gg: h_jet_pT_isp.gg[i].fill_bin(bin_pT);
+                 h_jet_y_isp .gg[i].fill_bin(bin_y);
+                 break;
+        case gq: h_jet_pT_isp.gq[i].fill_bin(bin_pT);
+                 h_jet_y_isp .gq[i].fill_bin(bin_y);
+                 break;
+        case qq: h_jet_pT_isp.qq[i].fill_bin(bin_pT);
+                 h_jet_y_isp .qq[i].fill_bin(bin_y);
+                 break;
         default: ;
       }
     }

@@ -5,5 +5,12 @@
 !src/
 !config/
 !scripts/
+!sql/
+
+sql/*
+
+!sql/Makefile
+!sql/*.py
+!sql/*.sh
 
 **.swp

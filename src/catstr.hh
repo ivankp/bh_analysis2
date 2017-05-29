@@ -7,6 +7,8 @@
 #include <sstream>
 #include <utility>
 
+namespace ivanp {
+
 namespace detail {
 
 template <typename S, typename T>
@@ -25,6 +27,8 @@ inline std::string cat(const TT&... tt) {
   std::stringstream ss;
   detail::cat_impl(ss,tt...);
   return ss.str();
+}
+
 }
 
 #endif

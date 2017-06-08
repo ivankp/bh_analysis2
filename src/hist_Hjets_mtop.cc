@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
 
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
-  TTreeReaderValue<Double_t> _weight(reader,"weight");
+  TTreeReaderValue<Double_t> _weight(reader,"weight2");
 #ifdef NLO
   TTreeReaderValue<Int_t> _id(reader,"id");
 #endif

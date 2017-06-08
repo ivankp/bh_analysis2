@@ -167,7 +167,7 @@ int main(int argc, char* argv[]) {
 
   // handle multiple weights
   std::vector<float_or_double_value_reader> _weights;
-  if (!weights_chain) _weights.emplace_back(reader,"weight");
+  if (!weights_chain) _weights.emplace_back(reader,"weight2");
   else {
     const TObjArray *bb = weights_chain->GetListOfBranches();
     _weights.reserve(bb->GetEntriesFast());

@@ -118,11 +118,11 @@ int main(int argc, char* argv[]) {
   if (weights_chain) {
     const TObjArray *bb = weights_chain->GetListOfBranches();
     _weights.reserve(bb->GetEntriesFast()+1);
-    _weights.emplace_back(reader,"weight");
+    _weights.emplace_back(reader,"weight2");
     for (const auto* b : *bb)
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
   } else {
-    _weights.emplace_back(reader,"weight");
+    _weights.emplace_back(reader,"weight2");
   }
   const auto nw = _weights.size();
   cout << "\n\033[36mWeights\033[0m:\n";

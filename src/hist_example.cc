@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
   TTreeReaderValue<Int_t> _id(reader,"id");
   TTreeReaderValue<Int_t> _nparticle(reader,"nparticle");
   TTreeReaderArray<Int_t> _kf(reader,"kf");
-  TTreeReaderValue<Double_t> _weight(reader,"weight");
+  TTreeReaderValue<Double_t> _weight(reader,"weight2");
 
   float_or_double_array_reader _px(reader,"px");
   float_or_double_array_reader _py(reader,"py");

@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
 
   // handle multiple weights
   std::vector<float_or_double_value_reader> _weights;
-  if (!weights_chain) _weights.emplace_back(reader,"weight");
+  if (!weights_chain) _weights.emplace_back(reader,"weight2");
   else {
     const TObjArray *bb = weights_chain->GetListOfBranches();
     _weights.reserve(bb->GetEntriesFast());
@@ -186,6 +186,8 @@ int main(int argc, char* argv[]) {
   h_(HT_30)
 
   h_(sumTau_yyj_30) h_(maxTau_yyj_30)
+
+  h_(old_H_pT) h_(old_jet1_pT)
 
   // ================================================================
 
@@ -286,6 +288,9 @@ int main(int argc, char* argv[]) {
     const double H_y  = higgs->Rapidity();
     h_pT_yy(H_pT);
     h_yAbs_yy(std::abs(H_y));
+
+    h_old_H_pT(H_pT);
+    h_old_jet1_pT(jets_pT[0]);
 
     const double A1_y = A1->Rapidity(), A2_y = A2->Rapidity();
     h_Dy_y_y(std::abs(A1_y-A2_y));

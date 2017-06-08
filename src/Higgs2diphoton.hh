@@ -11,11 +11,13 @@ class Higgs2diphoton {
   std::uniform_real_distribution<double> phi_dist; // φ
   std::uniform_real_distribution<double> cts_dist; // cos(θ*)
 
+  double phi, cts, sts, cos_phi, sin_phi; // remember last values
+
 public:
   Higgs2diphoton();
 
   std::pair<TLorentzVector,TLorentzVector>
-  operator()(const TLorentzVector& Higgs);
+  operator()(const TLorentzVector& Higgs, bool new_kin=true);
 };
 
 

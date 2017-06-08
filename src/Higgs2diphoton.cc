@@ -9,13 +9,15 @@ Higgs2diphoton::Higgs2diphoton()
 { }
 
 std::pair<TLorentzVector,TLorentzVector>
-Higgs2diphoton::operator()(const TLorentzVector& Higgs) {
-  const double phi = phi_dist(gen);
-  const double cts = cts_dist(gen);
+Higgs2diphoton::operator()(const TLorentzVector& Higgs, bool new_kin) {
+  if (new_kin) {
+    phi = phi_dist(gen);
+    cts = cts_dist(gen);
 
-  const double sts = std::sin(std::acos(cts));
-  const double cos_phi = std::cos(phi);
-  const double sin_phi = std::sin(phi);
+    sts = std::sin(std::acos(cts));
+    cos_phi = std::cos(phi);
+    sin_phi = std::sin(phi);
+  }
 
   const double E  = Higgs.M()/2;
   const TVector3 boost = Higgs.BoostVector();

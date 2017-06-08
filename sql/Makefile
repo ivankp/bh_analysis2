@@ -1,7 +1,7 @@
 DB := test.db
 DZ := $(DB).gz
 
-ADD := $(wildcard add_*.py)
+ADD := $(wildcard add_ntuples_*.py)
 
 .PHONY: all clean
 .PRECIOUS: $(DB)

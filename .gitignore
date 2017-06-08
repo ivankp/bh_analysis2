@@ -6,6 +6,7 @@
 !config/
 !scripts/
 !sql/
+!minlo/
 
 sql/*
 

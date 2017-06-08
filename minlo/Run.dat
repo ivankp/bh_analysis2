@@ -1,0 +1,93 @@
+(run){
+  % general settings
+  $RUNNAME:=GGFHT;
+  $BENERGY:=6500;
+  $NLOPART:=B;
+  $NJETS:=2;
+  $SID:=100;
+  EVENTS 5M;
+  # EVENTS 1000;
+  ERROR 0.05;
+  RANDOM_SEED $RNDSEED1 $RNDSEED2;
+
+  $SCALE_DEF:=0.25*sqr(sqrt(H_T2)-PPerp(p[2])+MPerp(p[2])); # ĤT'/2
+  # $SCALE_DEF:=sqrt(MPerp(p[2])+0.5*sqrt(H_T2)); # ĤT''/2
+
+  $PDF:=CT10nlo
+  VARIATIONS [4.0,4.0],$PDF;
+
+  % Simple reweighting
+  # SCALES VAR{$SCALE_DEF}
+
+  % MINLO
+  SCALES MINLO;
+  CORE_SCALE VAR{$SCALE_DEF}
+  KFACTOR MINLO;
+  MINLO_NOUT_MIN=1;
+  MINLO_MUF_VARIATION_MODE=0
+
+  # ROOTNTUPLE_LO_MODE=1
+  % For ordering of the scales in the branchings (default is 0)
+  # MINLO_FORCE_ORDER=1;
+
+  % analysis settings
+  $FNAME:=H$NJETS.0j_$RUNNAME_$NLOPART_$BENERGY_pt25.0_eta4.5_r100_$SID;
+  $OUT_PATH:=/home/ivanp
+  ANALYSIS Rivet;
+  # ANALYSIS Internal;
+  ANALYSIS_OUTPUT $FNAME
+  % NTuple input
+  EVENT_INPUT Root[/msu/data/t3work4/luisonig/H$NJETSjets_ggf/EDNTuplesFiles/$FNAME];
+  % Output new weights
+  EVT_FILE_PATH $OUT_PATH
+  EVENT_OUTPUT=Weights[$FNAME]
+
+  % PDF settings
+  PDF_LIBRARY LHAPDFSherpa;
+  USE_PDF_ALPHAS=1;
+  PDF_SET $PDF;
+
+  % tags and settings for ME generators
+  $DIPAL:=0.01;
+  $LOOPGEN:=LHOLE;
+  ME_SIGNAL_GENERATOR   Comix $LOOPGEN;
+  EVENT_GENERATION_MODE Weighted;
+  RESULT_DIRECTORY      Results/Res_$RUNNAME_$BENERGY_$NLOPART_d$DIPAL/;
+  DIPOLE_ALPHA          $DIPAL;
+  USE_DUMMY_VIRTUAL     1;
+
+  % model parameters
+  MODEL HEFT;
+  EW_SCHEME 0;
+  WIDTH_SCHEME Fixed;
+  MASS[23]=91.1876; WIDTH[23]=2.4900; # Z
+  MASS[24]=80.4190; WIDTH[24]=2.0476; # W
+  MASS[25]=125.0;   WIDTH[25]=0.0;    # H
+  YUKAWA[5] =0;
+  YUKAWA[15]=0;
+  STABLE[5] =1;
+  VEV = 246.0;
+
+  % collider setup
+  BEAM_1  2212; BEAM_ENERGY_1 $BENERGY;
+  BEAM_2  2212; BEAM_ENERGY_2 $BENERGY;
+  K_PERP_MEAN_1 0.; K_PERP_SIGMA_1 0.;
+  K_PERP_MEAN_2 0.; K_PERP_SIGMA_2 0.;
+}(run);
+
+(processes){
+  ### The Born piece
+  Process 93 93 -> 25 93;
+  NLO_QCD_Mode Fixed_Order;
+  NLO_QCD_Part $NLOPART;
+  Loop_Generator $LOOPGEN;
+  Order_EW 1;
+  End process;
+}(processes);
+
+(analysis){
+  BEGIN_RIVET {
+    USE_HEPMC_SHORT 1;
+  } END_RIVET
+}(analysis);
+

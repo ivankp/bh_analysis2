@@ -12,20 +12,19 @@ def until(l,total,pred):
         if s >= total: break;
     return (s,o)
 
-exe = 'hist_Hjets'
 N = 10000000
 NRS = 2*N
 
 locale.setlocale(locale.LC_ALL, 'en_US')
 print 'N = ' + locale.format('%d', N, grouping=True)
 
+exe = 'hist_Hjets'
 path = '/home/ivanp/work/bh_analysis2'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
-for njets in [1]:
+for njets in [1,2,3]:
     for part in ['B','RS','I','V']:
-    # for part in ['RS']:
         cur.execute('SELECT dir,file,nevents FROM ntuples WHERE'\
                     ' not instr(info,\'mtop\') and'\
                     ' not instr(info,\'ED\') and'\
@@ -36,7 +35,7 @@ for njets in [1]:
 
         ntuples = until(ntuples, NRS if part=='RS' else N, lambda x: x[2])[1]
 
-        name = path+'/out/'+exe+'_{}j_{}'.format(njets,part)
+        name = path+'/out/default_{}j_{}'.format(njets,part)
         with open(name+'.out','w') as out, open(name+'.err','w') as err:
             p = Popen(
                 [ path+'/bin/'+exe,

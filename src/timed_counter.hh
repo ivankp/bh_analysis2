@@ -8,6 +8,10 @@
 #include <sstream>
 #include <chrono>
 
+#if __has_include(<unistd.h>)
+#include <unistd.h>
+#endif
+
 namespace ivanp {
 
 class comma_numpunct: public std::numpunct<char> {
@@ -72,8 +76,15 @@ public:
       cout << int(ms_type(clock_type::now() - start).count()) << "ms";
     }
 
+#if __has_include(<unistd.h>)
+    if (isatty(1)) {
+      cout.flush();
+      for (int i=nb; i; --i) cout << '\b';
+    } else cout << std::endl;
+#else
     cout.flush();
     for (int i=nb; i; --i) cout << '\b';
+#endif
     cout.flags(f);
     cout.precision(prec);
   }

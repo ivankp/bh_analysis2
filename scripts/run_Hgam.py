@@ -12,9 +12,8 @@ def until(l,total,pred):
         if s >= total: break;
     return (s,o)
 
-exe = 'hist_Hjets_ATLAS'
-N = 10000000
-NRS = 2*N
+exe = 'hist_hgam'
+N = 30000000
 
 locale.setlocale(locale.LC_ALL, 'en_US')
 print 'N = ' + locale.format('%d', N, grouping=True)
@@ -34,13 +33,14 @@ for njets in [1]:
                     ' and njets={} and part=\'{}\''.format(njets,part))
         ntuples = cur.fetchall()
 
-        ntuples = until(ntuples, NRS if part=='RS' else N, lambda x: x[2])[1]
+        ntuples = until(ntuples, N, lambda x: x[2])[1]
 
-        name = path+'/out/atlas_{}j_{}'.format(njets,part)
+        name = path+'/out/hgam_{}j_{}'.format(njets,part)
         with open(name+'.out','w') as out, open(name+'.err','w') as err:
             p = Popen(
                 [ path+'/bin/'+exe,
                   '{}j'.format(njets), 'out:'+name+'_raw.root' ] +\
+                sys.argv[1:] +\
                 [ x[0]+'/'+x[1] for x in ntuples ],
                 stdout=out, stderr=err)
         print name

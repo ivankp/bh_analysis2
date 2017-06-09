@@ -67,8 +67,8 @@ L_hist_Hjets_mtop := $(L_hist_Hjets)
 C_hist_Hjets_isolation := $(C_hist_Hjets)
 L_hist_Hjets_isolation := $(L_hist_Hjets)
 
-C_hist_Hjets_ATLAS := $(C_hist_Hjets)
-L_hist_Hjets_ATLAS := $(L_hist_Hjets)
+C_hist_hgam := $(C_hist_Hjets)
+L_hist_hgam := $(L_hist_Hjets)
 
 C_hist_example := $(C_hist_Hjets)
 L_hist_example := $(L_hist_Hjets)
@@ -108,7 +108,7 @@ endif
 
 $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/scale_dep: $(BLD)/reweighter.o
-$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_Hjets_ATLAS: \
+$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam: \
   $(BLD)/Higgs2diphoton.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)

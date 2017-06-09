@@ -35,12 +35,20 @@ template <size_t D> using TH_t = typename TH<D>::type;
 
 }
 
+template <typename T>
+inline std::enable_if_t<std::is_integral<T>::value,double>
+half_shift(T x) noexcept { return x - 0.5; }
+template <typename T>
+inline std::enable_if_t<!std::is_integral<T>::value,T>
+half_shift(T x) noexcept { return x; }
+
 #ifdef ROOT_TH1
 template <typename A1>
 TH1D* make_TH(const std::string& name, const std::tuple<A1>& axes) {
   const auto& a1 = std::get<0>(axes);
   if (a1.is_uniform()) {
-    return new TH1D(name.c_str(),"",a1.nbins(),a1.min(),a1.max());
+    return new TH1D(name.c_str(),"",
+      a1.nbins(),half_shift(a1.min()),half_shift(a1.max()));
   } else {
     return new TH1D(name.c_str(),"",
       a1.nbins(),vector_of_edges<double>(a1).data());
@@ -111,13 +119,13 @@ class bin_converter_traits {
   template <typename T> struct _has_weight<T,
     void_t<decltype( std::declval<T>().weight(std::declval<Bin>()) )>
   > : std::true_type { };
-  
+
   template <typename, typename = void>
   struct _has_sumw2 : std::false_type { };
   template <typename T> struct _has_sumw2<T,
     void_t<decltype( std::declval<T>().sumw2(std::declval<Bin>()) )>
   > : std::true_type { };
-  
+
   template <typename, typename = void>
   struct _has_num : std::false_type { };
   template <typename T> struct _has_num<T,
@@ -163,7 +171,7 @@ class last_is_empty {
   template <typename Last, typename = void> struct impl : std::false_type { };
   template <typename Last>
   struct impl<Last, std::enable_if_t< std::is_empty<Last>::value > >
-  : std::true_type { }; 
+  : std::true_type { };
 public:
   static constexpr bool value = impl<
     std::tuple_element_t<sizeof...(Args),std::tuple<int,Args...>>

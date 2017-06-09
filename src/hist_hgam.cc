@@ -60,6 +60,12 @@ template <bool... OF>
 using re_hist = ivanp::binner<nlo_multibin, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
+void excl_labels(TH1* h, bool excl) {
+  auto* ax = h->GetXaxis();
+  for (int i=1, n=h->GetNbinsX(); i<=n; ++i)
+    ax->SetBinLabel(i,cat(excl ? "=" : ">=", i-1).c_str());
+}
+
 inline bool photon_eta_cut(double abs_eta) noexcept {
   return (1.37 < abs_eta && abs_eta < 1.52) || (2.37 < abs_eta);
 }
@@ -73,6 +79,7 @@ int main(int argc, char* argv[]) {
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;
   bool w_arg = false;
+  bool no_photon_cuts = false;
 
   for (int i=1; i<argc; ++i) {
     using namespace parse;
@@ -84,6 +91,10 @@ int main(int argc, char* argv[]) {
     if (bins_file_name(argv[i],bins_file)) continue;
     if (jetdef(argv[i],jet_def)) continue;
     if (parse::tree_name(argv[i],tree_name)) continue;
+    if (!strcmp(argv[i],"--no-photon-cuts")) {
+      no_photon_cuts = true;
+      continue;
+    }
 
     cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
     return 1;
@@ -201,7 +212,7 @@ int main(int argc, char* argv[]) {
 
   Higgs2diphoton Hdecay;
 
-  size_t ncount = 0, num_events = 0, num_selected = 0;
+  size_t ncount = 0, num_events = 0;
 
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
@@ -251,8 +262,19 @@ int main(int argc, char* argv[]) {
       });
     // resulting number of jets
     const unsigned njets = fj_jets.size();
-    // --------------------------------------------------------------
 
+    // decltype(particles) fj_jets;
+    // fj_jets.reserve(particles.size());
+    // for (const auto& p : particles) {
+    //   if (p.pt()<jet_pt_cut) continue;
+    //   if (p.eta()>jet_eta_cut) continue;
+    //   fj_jets.emplace_back(p);
+    // }
+    // std::sort(fj_jets.begin(),fj_jets.end(),
+    //   [](const auto& a, const auto& b){ return a.pt() > b.pt(); });
+    // const unsigned njets = fj_jets.size();
+
+    // Cuts ---------------------------------------------------------
     const double H_mass = higgs->M();
 
     const auto photons = Hdecay(*higgs,new_id);
@@ -263,14 +285,19 @@ int main(int argc, char* argv[]) {
       std::swap(A1_pT,A2_pT);
     }
 
-    // if (A1_pT < 0.35*H_mass) continue;
-    // if (A2_pT < 0.25*H_mass) continue;
+    if (!no_photon_cuts) {
+      if (A1_pT < 0.35*H_mass) continue;
+      if (A2_pT < 0.25*H_mass) continue;
+    }
 
     const double A1_eta = A1->Eta();
-    // if (photon_eta_cut(std::abs(A1_eta))) continue;
+    if (!no_photon_cuts)
+      if (photon_eta_cut(std::abs(A1_eta))) continue;
     const double A2_eta = A2->Eta();
-    // if (photon_eta_cut(std::abs(A2_eta))) continue;
+    if (!no_photon_cuts)
+      if (photon_eta_cut(std::abs(A2_eta))) continue;
 
+    // Fill histograms ----------------------------------------------
     const auto jets_pT = fj_jets | [](const auto& jet){ return jet.pt(); };
 
     h_N_j_30.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
@@ -278,19 +305,11 @@ int main(int argc, char* argv[]) {
         [](double pT){ return pT > 50.; }
       )+1);
 
-    if (njets < need_njets) continue; // at least needed number of jets
-
-    ++num_selected;
-    // --------------------------------------------------------------
-
-    // Fill histograms ----------------------------------------------
     const double H_pT = higgs->Pt();
     const double H_y  = higgs->Rapidity();
     h_pT_yy(H_pT);
-    h_yAbs_yy(std::abs(H_y));
-
     h_old_H_pT(H_pT);
-    h_old_jet1_pT(jets_pT[0]);
+    h_yAbs_yy(std::abs(H_y));
 
     const double A1_y = A1->Rapidity(), A2_y = A2->Rapidity();
     h_Dy_y_y(std::abs(A1_y-A2_y));
@@ -298,16 +317,19 @@ int main(int argc, char* argv[]) {
     h_yAbs_y2(std::abs(A2_y));
 
     h_cosTS_yy(
-      std::sinh(A1_eta-A2_eta) * A1_pT * A2_pT * 2
+      std::sinh(std::abs(A1_eta-A2_eta)) * A1_pT * A2_pT * 2
       / ( std::sqrt(1.+sq(H_pT/H_mass)) * sq(H_mass) ) );
 
     h_pTt_yy(pTt(*A1,*A2));
+
+    if (njets < 1) continue; // 1111111111111111111111111111111111111
 
     const auto jets_y = fj_jets | [](const auto& jet){ return jet.rap(); };
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
       h_jet_pT  [i](jets_pT[i]);
       h_jet_yAbs[i](std::abs(jets_y[i]));
     }
+    h_old_jet1_pT(jets_pT[0]);
     h_HT_30(std::accumulate(jets_pT.begin(),jets_pT.end(),0.));
 
     const auto jets_tau = fj_jets | [=](const auto& jet){ return tau(jet,H_y); };
@@ -323,7 +345,6 @@ int main(int argc, char* argv[]) {
   } // END EVENT LOOP
   // ================================================================
 
-  cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << '\n' << endl;
 
@@ -347,14 +368,18 @@ int main(int argc, char* argv[]) {
     using ivanp::root::slice_to_root;
 
     auto* h_N_j_30_excl = to_root(h_N_j_30,"N_j_30");
+    excl_labels(h_N_j_30_excl,true);
     h_N_j_30.integrate_left();
     auto* h_N_j_30_incl = to_root(h_N_j_30,"N_j_30_incl");
     h_N_j_30_incl->SetEntries( h_N_j_30_excl->GetEntries() );
+    excl_labels(h_N_j_30_excl,false);
 
     auto* h_N_j_50_excl = to_root(h_N_j_50,"N_j_50");
+    excl_labels(h_N_j_50_excl,true);
     h_N_j_50.integrate_left();
     auto* h_N_j_50_incl = to_root(h_N_j_50,"N_j_50_incl");
     h_N_j_50_incl->SetEntries( h_N_j_50_excl->GetEntries() );
+    excl_labels(h_N_j_50_excl,false);
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
@@ -369,7 +394,7 @@ int main(int argc, char* argv[]) {
   fout->cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);
   h_N->SetBinContent(1,ncount);
-  h_N->SetEntries(num_selected);
+  h_N->SetEntries(num_events);
   fout->Write();
   cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
 

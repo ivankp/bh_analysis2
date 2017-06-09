@@ -15,8 +15,8 @@ print 'N = ' + locale.format('%d', N, grouping=True) + '\n'
 
 exe = 'hist_Hjets'
 path = '/home/ivanp/work/bh_analysis2'
-card = path+'/minlo/Run2.dat'
-out = '/msu/data/t3work8/ivanp/minlo4'
+card = path+'/minlo/Run.dat'
+out = '/msu/data/t3work8/ivanp/HT2'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 

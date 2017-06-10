@@ -47,6 +47,9 @@ def condor(basename, args):
         f.write('cd {}\n'.format(out))
         f.write('/msu/data/t3work5/ivanp/4/sherpa/bin/Sherpa '\
                 '-f {} {}\n'.format(card,args))
+        f.write('zcat {}/{}.wts.gz | '.format(out,basename) +\
+                '/home/ivanp/work/sherpa_tools/bin/wts2root ' +\
+                out+'/'+basename+'.root\n')
     os.chmod(sh,0o775)
     return '''\
 Universe   = vanilla
@@ -65,7 +68,8 @@ for f in sorted(
     print '{}j {:<2}: {}'.format(f[0],f[1],f[3])
 
     base = f[3][:-5]
-    if os.path.isfile(out+'/'+base+'.wts.gz'):
+    if os.path.isfile(out+'/'+base+'.root') \
+    or os.path.isfile(out+'/'+base+'.wts.gz'):
         print 'already exists'
         continue
 

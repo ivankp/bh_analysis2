@@ -45,7 +45,7 @@ C_test_tree := $(ROOT_CFLAGS)
 L_test_tree := $(ROOT_LIBS) -lTreePlayer
 
 C_reweigh := $(ROOT_CFLAGS)
-L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS)
+L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS) -lboost_program_options
 
 C_reweighter := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 

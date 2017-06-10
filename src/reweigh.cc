@@ -1,14 +1,19 @@
 // Written by Ivan Pogrebnyak
 
 #include <iostream>
+#include <string>
+#include <vector>
 // #include <stdexcept>
 
-#include <TChain.h>
+#include <boost/program_options.hpp>
+
+#include <TFile.h>
+#include <TTree.h>
 
 #include "math.hh"
 #include "timed_counter.hh"
 #include "reweighter.hh"
-// #include "catstr.hh"
+#include "catstr.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -16,72 +21,90 @@
 using std::cout;
 using std::cerr;
 using std::endl;
-
-// using ivanp::cat;
+namespace po = boost::program_options;
+using ivanp::cat;
 using namespace ivanp::math;
-
-double Ht_Higgs(const entry& e) noexcept {
-  double _Ht = 0.;
-  for (Int_t i=0; i<e.nparticle; ++i) {
-    // double pt2 = sq(e.px[i],e.py[i]);
-    // if (e.kf[i]==25) pt2 += sq(125.); // mH^2
-    // _Ht += std::sqrt(pt2);
-    _Ht += std::sqrt( e.kf[i]==25
-        ? sq(e.E[i])-sq(e.pz[i]) // mT for Higgs
-        : sq(e.px[i],e.py[i]) ); // pT
-  }
-  return _Ht;
-}
+#include "scales.hh"
 
 int main(int argc, char* argv[]) {
-  if (argc==1) {
-    cout << "usage: " << argv[0] << " input.root ..." << endl;
-    return 0;
+  // START OPTIONS **************************************************
+  std::vector<std::string> ntuples;
+  std::string scale_name, pdf_name, output_dir;
+  bool do_pdf_variations;
+
+  try {
+    // General Options ------------------------------------
+    po::options_description desc("Options");
+    desc.add_options()
+      ("help,h", "produce help message")
+      ("input,i", po::value(&ntuples)->multitoken()->required(),
+       "*add input ntuples")
+      ("output,o", po::value(&output_dir)->required(),
+       "*output directory")
+      ("scale,s", po::value(&scale_name)->required(),
+       "*central scale name")
+      ("pdf,p", po::value(&pdf_name)->required(),
+       "*PDF set name")
+      ("pdf-variations,v", po::bool_switch(&do_pdf_variations),
+       "compute weights for PDF uncertainties")
+    ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    if (argc == 1 || vm.count("help")) {
+      cout << desc << endl;
+      return 0;
+    }
+    po::notify(vm);
+  } catch(std::exception& e) {
+    cerr << "\033[31mError: " <<  e.what() <<"\033[0m"<< endl;
+    return 1;
   }
+  // END OPTIONS ****************************************************
 
-  // Open input ntuples root file ===================================
-  TChain chain("t3");
-  cout << "\033[36mInput ntuples\033[0m:" << endl;
-  for (int i=1; i<argc; ++i) {
-    cout << "  " << argv[i] << endl;
-    if (!chain.Add(argv[i],0)) return 1;
-  }
+  for (const std::string& ntuple : ntuples) {
+    cout << "\033[36mReweighting\033[0m " << ntuple << endl;
 
-  scale_defs sd;
+    TFile fin(ntuple.c_str());
+    TTree *tin = static_cast<TTree*>(fin.Get("t3"));
 
-  // for (double x : {0.05,0.07,0.10,0.12,0.15,0.20, 0.25,0.3,0.4,0.5})
-  for (double x : {0.5,1.,0.25})
-    sd.scale_fcns.emplace_back([x](const entry& e){ return Ht_Higgs(e)*x; });
+    TFile fout(cat(output_dir,'/',ntuple.substr(ntuple.rfind('/')+1)).c_str(),
+               "recreate");
+    TTree *tout = new TTree("weights","");
 
-  // sd.scales_fac = {0,1,2,3,4,5};
-  // sd.scales_ren = {5,6,7,8,9};
-  sd.scales_fac = {0,1,2};
-  sd.scales_ren = {0,1,2};
-  // for (unsigned f=0; f<sd.scales_fac.size(); ++f)
-  //   for (unsigned r=0; r<sd.scales_ren.size(); ++r)
-  //     sd.scales.emplace_back(f,r);
-  sd.scales.emplace_back(0,0);
-  sd.scales.emplace_back(0,1);
-  sd.scales.emplace_back(1,0);
-  sd.scales.emplace_back(1,1);
-  sd.scales.emplace_back(0,2);
-  sd.scales.emplace_back(2,0);
-  sd.scales.emplace_back(2,2);
+    scale_defs sd;
 
-  reweighter rew(chain,(1<<19),"CT10nlo",sd);
+    std::vector<double> fracs {1.,2.,0.5};
+    for (double x : fracs)
+      sd.scale_fcns.emplace_back(
+        [x,scale=scales.at(scale_name)](const entry& e){ return x*scale(e); });
 
-  // LOOP ===========================================================
-  using tc = ivanp::timed_counter<Long64_t>;
-  // for (tc ent(chain.GetEntries()); !!ent; ++ent) {
-  for (tc ent(1); !!ent; ++ent) {
-    chain.GetEntry(ent);
-    // cout << endl;
+    sd.scales_fac = {0,1,2};
+    sd.scales_ren = {0,1,2};
 
-    rew();
+    const std::vector<std::pair<unsigned,unsigned>> combs {
+      {0,0},{0,1},{1,0},{1,1},{0,2},{2,0},{2,2} };
+    sd.scales.reserve(combs.size());
+    for (const std::pair<unsigned,unsigned>& i : combs) {
+      sd.scales.emplace_back(i.first,i.second);
+      tout->Branch(
+        cat( "MUF",fracs[i.first],"_MUR",fracs[i.second],"_PDF"/*NUMBER*/).c_str(),
+        &sd.scales.back());
+    }
 
-    // test( rew[0] )
-    for (unsigned i=0, n=sd.scales.size(); i<n; ++i)
-      cout << rew[i] << endl;
+    reweighter rew(*tin,pdf_name,sd);
+
+    // LOOP ===========================================================
+    using tc = ivanp::timed_counter<Long64_t>;
+    for (tc ent(tin->GetEntries()); !!ent; ++ent) {
+      tin->GetEntry(ent);
+
+      rew();
+
+      // test( rew[0] )
+      for (unsigned i=0, n=sd.scales.size(); i<n; ++i)
+        cout << rew[i] << endl;
+    }
   }
 
   return 0;

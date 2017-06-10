@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
     for (unsigned r=0; r<sd.scales_ren.size(); ++r)
       sd.scales.emplace_back(f,r);
 
-  reweighter rew(chain,(1<<19),"CT10nlo",sd);
+  reweighter rew(chain,"CT10nlo",sd);
 
   Double_t weight;
   Float_t pz[8], E[8];

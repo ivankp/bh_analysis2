@@ -36,12 +36,16 @@ entry::entry(TTree& tree, Long64_t cacheSize) {
 }
 
 reweighter::reweighter(
-  TTree& tree, Long64_t cacheSize, const char* pdf_name, const scale_defs& sd
-) : entry(tree,cacheSize), pdf(LHAPDF::mkPDF(pdf_name,0)), sd(sd),
+  TTree& tree, const std::string& pdf_name, const scale_defs& sd,
+  bool all, Long64_t cacheSize
+) : entry(tree,cacheSize), pdfs(LHAPDF::mkPDFs(pdf_name)), pdf(pdfs[0]),
+    sd(sd),
     scale_values(sd.scale_fcns.size()), new_weights(sd.scales.size()),
     _fac_vars(sd.scales_fac.size()), _ren_vars(sd.scales_ren.size())
 { }
-reweighter::~reweighter() { delete pdf; }
+reweighter::~reweighter() {
+  for (auto pdf : pdfs) delete pdf;
+}
 
 double reweighter::fr1(unsigned r, double muF) const {
   const double x = this->x[r];

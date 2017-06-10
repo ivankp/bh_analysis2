@@ -263,16 +263,7 @@ int main(int argc, char* argv[]) {
     // resulting number of jets
     const unsigned njets = fj_jets.size();
 
-    // decltype(particles) fj_jets;
-    // fj_jets.reserve(particles.size());
-    // for (const auto& p : particles) {
-    //   if (p.pt()<jet_pt_cut) continue;
-    //   if (p.eta()>jet_eta_cut) continue;
-    //   fj_jets.emplace_back(p);
-    // }
-    // std::sort(fj_jets.begin(),fj_jets.end(),
-    //   [](const auto& a, const auto& b){ return a.pt() > b.pt(); });
-    // const unsigned njets = fj_jets.size();
+    if (njets < need_njets) continue; // at least needed number of jets
 
     // Cuts ---------------------------------------------------------
     const double H_mass = higgs->M();
@@ -322,8 +313,6 @@ int main(int argc, char* argv[]) {
 
     h_pTt_yy(pTt(*A1,*A2));
 
-    if (njets < 1) continue; // 1111111111111111111111111111111111111
-
     const auto jets_y = fj_jets | [](const auto& jet){ return jet.rap(); };
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
       h_jet_pT  [i](jets_pT[i]);
@@ -367,14 +356,14 @@ int main(int argc, char* argv[]) {
     using ivanp::root::to_root;
     using ivanp::root::slice_to_root;
 
-    auto* h_N_j_30_excl = to_root(h_N_j_30,"N_j_30");
+    auto* h_N_j_30_excl = to_root(h_N_j_30,"N_j_30_excl");
     excl_labels(h_N_j_30_excl,true);
     h_N_j_30.integrate_left();
     auto* h_N_j_30_incl = to_root(h_N_j_30,"N_j_30_incl");
     h_N_j_30_incl->SetEntries( h_N_j_30_excl->GetEntries() );
     excl_labels(h_N_j_30_excl,false);
 
-    auto* h_N_j_50_excl = to_root(h_N_j_50,"N_j_50");
+    auto* h_N_j_50_excl = to_root(h_N_j_50,"N_j_50_excl");
     excl_labels(h_N_j_50_excl,true);
     h_N_j_50.integrate_left();
     auto* h_N_j_50_incl = to_root(h_N_j_50,"N_j_50_incl");

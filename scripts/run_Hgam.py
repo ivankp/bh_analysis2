@@ -22,7 +22,7 @@ path = '/home/ivanp/work/bh_analysis2'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
-for njets in [1]:
+for njets in [1,2]:
     for part in ['B','RS','I','V']:
     # for part in ['RS']:
         cur.execute('SELECT dir,file,nevents FROM ntuples WHERE'\

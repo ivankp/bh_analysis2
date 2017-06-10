@@ -52,7 +52,8 @@ namespace LHAPDF {
 }
 
 class reweighter : entry {
-  LHAPDF::PDF *pdf; // owned here
+  std::vector<LHAPDF::PDF*> pdfs; // owned here
+  LHAPDF::PDF *pdf = nullptr;
   const scale_defs& sd;
 
   std::vector<double> scale_values, new_weights;
@@ -63,8 +64,11 @@ class reweighter : entry {
   std::vector<ren_vars> _ren_vars;
 
 public:
-  reweighter(TTree& tree, Long64_t cacheSize,
-             const char* pdf_name, const scale_defs& sd);
+  reweighter(TTree& tree,
+             const std::string& pdf,
+             const scale_defs& sd,
+             bool all = false,
+             Long64_t cacheSize = (1<<19));
   ~reweighter();
 
   double fr1(unsigned r, double muF) const;
@@ -78,5 +82,6 @@ public:
 public:
   void operator()();
   inline double operator[](unsigned i) const { return new_weights[i]; }
+  inline auto size() const noexcept { return new_weights.size(); }
 };
 

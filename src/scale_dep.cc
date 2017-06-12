@@ -24,23 +24,7 @@ namespace fj = fastjet;
 
 // using ivanp::cat;
 using namespace ivanp::math;
-
-double HThp(const entry& e) noexcept {
-  double _Ht = 0.;
-  for (Int_t i=0; i<e.nparticle; ++i) {
-    double pt2 = sq(e.px[i],e.py[i]);
-    if (e.kf[i]==25) pt2 += sq(125.); // mH^2
-    _Ht += std::sqrt(pt2);
-  }
-  return _Ht;
-}
-
-double HThpp(const entry& e) noexcept {
-  double _Ht = 0.;
-  for (Int_t i=0; i<e.nparticle; ++i)
-    _Ht += std::sqrt(sq(e.px[i],e.py[i]));
-  return (0.5*_Ht) + 125.;
-}
+#include "scales.hh"
 
 struct ww2 {
   double wtmp = 0., w = 0., w2 = 0.;
@@ -117,7 +101,7 @@ int main(int argc, char* argv[]) {
 
   for (double x : Ht_fracs) {
     static unsigned i = 0;
-    sd.scale_fcns.emplace_back([x](const entry& e){ return HThpp(e)*x; });
+    sd.scale_fcns.emplace_back([x](const entry& e){ return HT_hat_pp(e)*x; });
     sd.scales_fac.emplace_back(i);
     sd.scales_ren.emplace_back(i);
     ++i;
@@ -127,7 +111,7 @@ int main(int argc, char* argv[]) {
     for (unsigned r=0; r<sd.scales_ren.size(); ++r)
       sd.scales.emplace_back(f,r);
 
-  reweighter rew(chain,"CT10nlo",sd);
+  reweighter rew(chain,sd,"CT10nlo");
 
   Double_t weight;
   Float_t pz[8], E[8];

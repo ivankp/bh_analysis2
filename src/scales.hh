@@ -3,12 +3,6 @@
 
 #include <map>
 
-struct mu_fcn {
-  virtual double operator()(const entry& e) const =0;
-  virtual const char* name() const =0;
-  virtual ~mu_fcn() noexcept { }
-};
-
 double HT(const entry& e) noexcept {
   double _HT = 0.;
   for (Int_t i=0; i<e.nparticle; ++i)
@@ -38,6 +32,12 @@ const std::map<std::string,double(*)(const entry& e)> scales {
   {"HT_hat_p", &HT_hat_p},
   {"HT_hat_p2", &HT_hat_p2},
   {"HT_hat_pp", &HT_hat_pp}
+};
+const std::map<std::string,std::string> scales_pretty {
+  {"HT", "HT"},
+  {"HT_hat_p", "ĤT\'"},
+  {"HT_hat_p2", "ĤT\'/2"},
+  {"HT_hat_pp", "ĤT\'\'"}
 };
 
 #endif

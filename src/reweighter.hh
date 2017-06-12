@@ -14,10 +14,10 @@ void branch(TTree& tree, const char* name, T* addr) {
 
 struct entry {
   Int_t           nparticle;
-  Double_t        px[8]; //[nparticle]
-  Double_t        py[8]; //[nparticle]
-  Double_t        pz[8]; //[nparticle]
-  Double_t        E [8]; //[nparticle]
+  Float_t        px[8]; //[nparticle]
+  Float_t        py[8]; //[nparticle]
+  Float_t        pz[8]; //[nparticle]
+  Float_t        E [8]; //[nparticle]
   Int_t           kf[8];
   Double_t        alphas;
   Double_t        weight2;
@@ -52,25 +52,28 @@ namespace LHAPDF {
 }
 
 class reweighter : entry {
-  std::vector<LHAPDF::PDF*> pdfs; // owned here
-  LHAPDF::PDF *pdf = nullptr;
+  std::vector<std::unique_ptr<LHAPDF::PDF>> _pdfs; // owned here
   const scale_defs& sd;
 
-  std::vector<double> scale_values, new_weights;
+  std::vector<double> scale_values;
+  std::vector<float> new_weights;
 
   struct fac_vars { double m, ff; };
   struct ren_vars { double ar, w0; };
   std::vector<fac_vars> _fac_vars;
   std::vector<ren_vars> _ren_vars;
 
+  LHAPDF::PDF *pdf = nullptr;
+
 public:
   reweighter(TTree& tree,
-             const std::string& pdf,
              const scale_defs& sd,
+             const std::string& pdf,
              bool all = false,
              Long64_t cacheSize = (1<<19));
   ~reweighter();
 
+private:
   double fr1(unsigned r, double muF) const;
   double fr2(unsigned r, double muF) const;
   double fr3(unsigned r, double muF) const;
@@ -78,10 +81,14 @@ public:
 
   void fac_calc(unsigned i);
   void ren_calc(unsigned i);
+  double combine(unsigned i);
 
 public:
   void operator()();
-  inline double operator[](unsigned i) const { return new_weights[i]; }
+  inline const auto& operator[](unsigned i) const { return new_weights[i]; }
+  inline auto& operator[](unsigned i) { return new_weights[i]; }
   inline auto size() const noexcept { return new_weights.size(); }
+  const auto& pdfs() const { return _pdfs; }
+  const int pdf_id(unsigned i) const;
 };
 

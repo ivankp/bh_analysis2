@@ -3,12 +3,13 @@
 #include <iostream>
 #include <string>
 #include <vector>
-// #include <stdexcept>
+#include <ctime>
 
 #include <boost/program_options.hpp>
 
 #include <TFile.h>
 #include <TTree.h>
+#include <TNamed.h>
 
 #include "math.hh"
 #include "timed_counter.hh"
@@ -69,7 +70,14 @@ int main(int argc, char* argv[]) {
     TTree *tin = static_cast<TTree*>(fin.Get("t3"));
 
     TFile fout(cat(output_dir,'/',ntuple.substr(ntuple.rfind('/')+1)).c_str(),
-               "recreate");
+               "recreate","weights",109);
+    {
+      TNamed("central scale",scales_pretty.at(scale_name).c_str()).Write();
+      TNamed("PDF",pdf_name.c_str()).Write();
+      TNamed("ntuple",ntuple.c_str()).Write();
+      const time_t current_time = std::time(nullptr);
+      TNamed("time stamp",std::ctime(&current_time)).Write();
+    }
     TTree *tout = new TTree("weights","");
 
     scale_defs sd;
@@ -85,14 +93,26 @@ int main(int argc, char* argv[]) {
     const std::vector<std::pair<unsigned,unsigned>> combs {
       {0,0},{0,1},{1,0},{1,1},{0,2},{2,0},{2,2} };
     sd.scales.reserve(combs.size());
-    for (const std::pair<unsigned,unsigned>& i : combs) {
+    for (const auto& i : combs) {
       sd.scales.emplace_back(i.first,i.second);
-      tout->Branch(
-        cat( "MUF",fracs[i.first],"_MUR",fracs[i.second],"_PDF"/*NUMBER*/).c_str(),
-        &sd.scales.back());
     }
 
-    reweighter rew(*tin,pdf_name,sd);
+    reweighter rew(*tin,sd,pdf_name,do_pdf_variations);
+
+    for (unsigned i=0; i<combs.size(); ++i) {
+      tout->Branch(
+        cat( "MUF",fracs[sd.scales_fac[combs[i].first]],
+            "_MUR",fracs[sd.scales_ren[combs[i].second]],
+            "_PDF",rew.pdf_id(0) ).c_str(),
+        &rew[i]);
+    }
+    if (do_pdf_variations) {
+      for (unsigned i=combs.size(); i<rew.size(); ++i) {
+        tout->Branch(
+          cat( "MUF1_MUR1_PDF", rew.pdf_id(i+1-combs.size()) ).c_str(),
+          &rew[i]);
+      }
+    }
 
     // LOOP ===========================================================
     using tc = ivanp::timed_counter<Long64_t>;
@@ -101,10 +121,12 @@ int main(int argc, char* argv[]) {
 
       rew();
 
-      // test( rew[0] )
-      for (unsigned i=0, n=sd.scales.size(); i<n; ++i)
-        cout << rew[i] << endl;
+      tout->Fill();
     }
+
+    tout->Write("",TObject::kOverwrite);
+    cout << "\n\033[32mWrote\033[0m: " << fout.GetName() << endl;
+    cout << "Compression factor: " << fout.GetCompressionFactor() << endl;
   }
 
   return 0;

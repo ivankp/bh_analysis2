@@ -35,17 +35,28 @@ entry::entry(TTree& tree, Long64_t cacheSize) {
   tree.StopCacheLearningPhase();
 }
 
+inline std::vector<std::unique_ptr<LHAPDF::PDF>>
+mkpdfs(const std::string& name, bool all) {
+  if (all) {
+    const auto pdfs = LHAPDF::mkPDFs(name);
+    return { pdfs.begin(), pdfs.end() };
+  } else {
+    std::vector<std::unique_ptr<LHAPDF::PDF>> pdfs;
+    pdfs.emplace_back( LHAPDF::mkPDF(name) );
+    return std::move(pdfs);
+  }
+}
+
 reweighter::reweighter(
-  TTree& tree, const std::string& pdf_name, const scale_defs& sd,
-  bool all, Long64_t cacheSize
-) : entry(tree,cacheSize), pdfs(LHAPDF::mkPDFs(pdf_name)), pdf(pdfs[0]),
-    sd(sd),
-    scale_values(sd.scale_fcns.size()), new_weights(sd.scales.size()),
+  TTree& tree, const scale_defs& sd,
+  const std::string& pdf_name, bool all,
+  Long64_t cacheSize
+) : entry(tree,cacheSize), _pdfs(mkpdfs(pdf_name,all)),
+    sd(sd), scale_values(sd.scale_fcns.size()),
+    new_weights(sd.scales.size()+_pdfs.size()-1),
     _fac_vars(sd.scales_fac.size()), _ren_vars(sd.scales_ren.size())
 { }
-reweighter::~reweighter() {
-  for (auto pdf : pdfs) delete pdf;
-}
+reweighter::~reweighter() { }
 
 double reweighter::fr1(unsigned r, double muF) const {
   const double x = this->x[r];
@@ -109,32 +120,54 @@ void reweighter::ren_calc(unsigned i) {
   }
 }
 
+double reweighter::combine(unsigned i) { // i is scale index
+  const auto& scale = sd.scales[i];
+  double w;
+
+  if (scale.fac) {
+    const fac_vars& fac = _fac_vars[*scale.fac];
+    w = fac.m;
+    if (scale.ren) {
+      const ren_vars& ren = _ren_vars[*scale.ren];
+      w += ren.w0 * fac.ff;
+    } else {
+      w += me_wgt2 * fac.ff;
+    }
+  } else {
+    w = weight2;
+  }
+  if (scale.ren) {
+    const ren_vars& ren = _ren_vars[*scale.ren];
+    w *= ren.ar;
+  }
+
+  return w;
+}
+
 void reweighter::operator()() {
   for (unsigned i=0; i<sd.scale_fcns.size(); ++i)
     scale_values[i] = sd.scale_fcns[i](*this);
 
+  pdf = _pdfs[0].get();
   for (unsigned i=0; i<sd.scales_fac.size(); ++i) fac_calc(i);
   for (unsigned i=0; i<sd.scales_ren.size(); ++i) ren_calc(i);
 
-  for (unsigned i=0; i<sd.scales.size(); ++i) { // combine
-    const auto& scale = sd.scales[i];
+  // scale variations
+  for (unsigned i=0; i<sd.scales.size(); ++i)
+    new_weights[i] = combine(i);
 
-    double& w = new_weights[i];
-    if (scale.fac) {
-      const fac_vars& fac = _fac_vars[*scale.fac];
-      w = fac.m;
-      if (scale.ren) {
-        const ren_vars& ren = _ren_vars[*scale.ren];
-        w += ren.w0 * fac.ff;
-      } else {
-        w += me_wgt2 * fac.ff;
-      }
-    } else {
-      w = weight2;
-    }
-    if (scale.ren) {
-      const ren_vars& ren = _ren_vars[*scale.ren];
-      w *= ren.ar;
-    }
+  // pdf variations
+  for (unsigned i=1; i<_pdfs.size(); ++i) {
+    pdf = _pdfs[i].get();
+    fac_calc(0);
+    ren_calc(0);
+
+    new_weights[sd.scales.size()+i] = combine(0);
   }
 }
+
+const int reweighter::pdf_id(unsigned i) const {
+  const auto *pdf = _pdfs[i].get();
+  return pdf->lhapdfID() + pdf->memberID();
+}
+

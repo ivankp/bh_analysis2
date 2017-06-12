@@ -15,7 +15,7 @@ def until(l,total,pred):
 exe = 'hist_hgam'
 N = 30000000
 
-locale.setlocale(locale.LC_ALL, 'en_US')
+locale.setlocale(locale.LC_ALL,'')
 print 'N = ' + locale.format('%d', N, grouping=True)
 
 path = '/home/ivanp/work/bh_analysis2'

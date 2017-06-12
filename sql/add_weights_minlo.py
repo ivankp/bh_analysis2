@@ -6,7 +6,7 @@ if len(sys.argv)!=2:
     print 'usage:', sys.argv[0], 'ntuples.db'
     sys.exit(1)
 
-path = '/msu/data/t3work8/ivanp/minlo4'
+path = '/msu/data/t3work8/ivanp/HT2'
 
 db = sqlite3.connect(sys.argv[1])
 cur = db.cursor()

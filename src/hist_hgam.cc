@@ -263,8 +263,6 @@ int main(int argc, char* argv[]) {
     // resulting number of jets
     const unsigned njets = fj_jets.size();
 
-    if (njets < need_njets) continue; // at least needed number of jets
-
     // Cuts ---------------------------------------------------------
     const double H_mass = higgs->M();
 
@@ -288,7 +286,6 @@ int main(int argc, char* argv[]) {
     if (!no_photon_cuts)
       if (photon_eta_cut(std::abs(A2_eta))) continue;
 
-    // Fill histograms ----------------------------------------------
     const auto jets_pT = fj_jets | [](const auto& jet){ return jet.pt(); };
 
     h_N_j_30.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
@@ -296,6 +293,9 @@ int main(int argc, char* argv[]) {
         [](double pT){ return pT > 50.; }
       )+1);
 
+    if (njets < need_njets) continue; // at least needed number of jets
+
+    // Fill histograms ----------------------------------------------
     const double H_pT = higgs->Pt();
     const double H_y  = higgs->Rapidity();
     h_pT_yy(H_pT);

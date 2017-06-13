@@ -30,17 +30,17 @@ sets = defaultdict(collector)
 cur.execute('''
 SELECT nevents,njets,part,ntuples.dir,ntuples.file,weights.dir,weights.file
 FROM weights JOIN ntuples ON weights.ntuple_id = ntuples.id
-WHERE energy=13 and weights.scales=\'minlo HT-hat-pp\' and pdf=\'CT10nlo\'
+WHERE energy=13 and weights.scales=\'minlo HT-hat-p\' and pdf=\'CT10nlo\'
 ''')
 for f in cur.fetchall():
     sets[f[1:3]].add( f[0], f[3]+'/'+f[4], f[5]+'/'+f[6] )
 
 for k in sets:
     # print '{}: {}'.format(k,sets[k])
-    name = path+'/out/minlo_HT2_{}j_{}'.format(*k)
+    name = path+'/out/minlo_HT1_{}j_{}'.format(*k)
     with open(name+'.out','w') as out, open(name+'.err','w') as err:
         p = Popen(
-            [ path+'/bin/'+exe,
+            [ path+'/bin/'+exe, 'config/Hjets_coarser.bins',
               '{}j'.format(k[0]), 'out:'+name+'_raw.root' ] +\
             [ arg for f in sets[k].files for arg in ['bh', f[0], 'w', f[1]] ],
             # [ f[0] for f in sets[k].files ],

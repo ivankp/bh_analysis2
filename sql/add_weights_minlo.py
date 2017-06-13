@@ -6,7 +6,7 @@ if len(sys.argv)!=2:
     print 'usage:', sys.argv[0], 'ntuples.db'
     sys.exit(1)
 
-path = '/msu/data/t3work8/ivanp/HT2'
+path = '/msu/data/t3work8/ivanp/HT1'
 
 db = sqlite3.connect(sys.argv[1])
 cur = db.cursor()
@@ -34,7 +34,7 @@ for f in os.listdir(path):
     cur.execute( "insert into weights " + \
         "(ntuple_id,file,dir,scales,pdf,info) values " + \
         "({},'{}','{}','{}','{}','{}')".format(
-            id1, f, path, 'minlo HT-hat-pp', 'CT10nlo', ''
+            id1, f, path, 'minlo HT-hat-p', 'CT10nlo', ''
         )
     )
 

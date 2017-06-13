@@ -29,15 +29,13 @@ double HT_hat_pp(const entry& e) noexcept {
 
 const std::map<std::string,double(*)(const entry& e)> scales {
   {"HT", &HT},
-  {"HT_hat_p", &HT_hat_p},
-  {"HT_hat_p2", &HT_hat_p2},
-  {"HT_hat_pp", &HT_hat_pp}
+  {"HT1", &HT_hat_p2},
+  {"HT2", &HT_hat_pp}
 };
 const std::map<std::string,std::string> scales_pretty {
   {"HT", "HT"},
-  {"HT_hat_p", "ĤT\'"},
-  {"HT_hat_p2", "ĤT\'/2"},
-  {"HT_hat_pp", "ĤT\'\'"}
+  {"HT1", "ĤT\'/2"},
+  {"HT2", "ĤT\'\'"}
 };
 
 #endif

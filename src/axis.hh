@@ -128,12 +128,12 @@ public:
             std::enable_if_t<!std::is_reference<C>::value>* = nullptr>
   container_axis(container_axis&& axis): _edges(std::move(axis._edges)) { }
 
-  template <typename T, typename C=container_type,
+  template <typename C=container_type,
             std::enable_if_t<!is_std_array<C>::value>* = nullptr>
-  container_axis(std::initializer_list<T> edges): _edges(edges) { }
-  template <typename T, typename C=container_type,
+  container_axis(std::initializer_list<edge_type> edges): _edges(edges) { }
+  template <typename C=container_type,
             std::enable_if_t<is_std_array<C>::value>* = nullptr>
-  container_axis(std::initializer_list<T> edges) {
+  container_axis(std::initializer_list<edge_type> edges) {
     std::copy(edges.begin(),edges.end(),_edges.begin());
   }
 

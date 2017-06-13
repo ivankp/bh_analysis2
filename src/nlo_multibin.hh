@@ -51,7 +51,7 @@ template <> class bin_converter<nlo_multibin> {
 public:
   inline auto weight(const nlo_multibin& b) const noexcept {
     auto _b = get(b);
-    return _b.w + _b.wtmp;
+    return _b.w;
   }
   inline auto sumw2(const nlo_multibin& b) const noexcept {
     auto _b = get(b);

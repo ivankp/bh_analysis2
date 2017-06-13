@@ -41,8 +41,8 @@ LHAPDF_DIR    := $(shell fastjet-config --prefix)
 LHAPDF_CFLAGS := $(shell lhapdf-config --cppflags)
 LHAPDF_LIBS   := $(shell lhapdf-config --ldflags) -Wl,-rpath=$(LHAPDF_DIR)/lib
 
-C_test_tree := $(ROOT_CFLAGS)
-L_test_tree := $(ROOT_LIBS) -lTreePlayer
+C_check_tree := $(ROOT_CFLAGS)
+L_check_tree := $(ROOT_LIBS) -lTreePlayer
 
 C_reweigh := $(ROOT_CFLAGS)
 L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS) -lboost_program_options
@@ -82,6 +82,9 @@ L_xsec_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 C_Higgs2diphoton := $(ROOT_CFLAGS)
 C_test_H2AA := $(ROOT_CFLAGS)
 L_test_H2AA := $(ROOT_LIBS)
+
+C_test_binner := $(ROOT_CFLAGS)
+L_test_binner := $(ROOT_LIBS) -lTreePlayer
 
 SRC := src
 BIN := bin

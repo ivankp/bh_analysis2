@@ -120,6 +120,11 @@ public:
     return nbins_left<naxes-1>();
   }
 
+  constexpr auto begin() const noexcept { return bins.begin(); }
+  constexpr auto begin() noexcept { return bins.begin(); }
+  constexpr auto   end() const noexcept { return bins.end(); }
+  constexpr auto   end() noexcept { return bins.end(); }
+
 private:
   template <size_t I, typename A = axis_spec<I>>
   constexpr std::enable_if_t<A::under::value,bool>
@@ -204,28 +209,25 @@ public:
 
   template <typename C=container_type,
             std::enable_if_t<is_std_vector<C>::value>* = nullptr>
-  binner(typename Ax::axis... axes)
-  : _axes{std::forward<typename Ax::axis>(axes)...}, _bins(nbins_total()) { }
+  binner(typename Ax::axis... axes): _axes{axes...}, _bins(nbins_total()) { }
   template <typename C=container_type,
             std::enable_if_t<is_std_array<C>::value>* = nullptr>
-  binner(typename Ax::axis... axes)
-  : _axes{std::forward<typename Ax::axis>(axes)...}, _bins{} { }
+  binner(typename Ax::axis... axes): _axes{axes...}, _bins{} { }
 
   template <typename Name, typename C=container_type,
             std::enable_if_t<is_std_vector<C>::value>* = nullptr>
   binner(Name&& name, typename Ax::axis... axes)
-  : _axes{std::forward<typename Ax::axis>(axes)...}, _bins(nbins_total()) {
+  : _axes{axes...}, _bins(nbins_total()) {
     all.emplace_back(this,std::forward<Name>(name));
   }
   template <typename Name, typename C=container_type,
             std::enable_if_t<is_std_array<C>::value>* = nullptr>
-  binner(Name&& name, typename Ax::axis... axes)
-  : _axes{std::forward<typename Ax::axis>(axes)...}, _bins{} {
+  binner(Name&& name, typename Ax::axis... axes): _axes{axes...}, _bins{} {
     all.emplace_back(this,std::forward<Name>(name));
   }
 
   template <typename C>
-  binner(std::tuple<typename Ax::axis...>&& axes, C&& bins)
+  binner(std::tuple<typename Ax::axis...> axes, C&& bins)
   : _axes(axes), _bins(std::forward<C>(bins)) { }
 
   binner(const binner& o): _axes(o._axes), _bins(o._bins) { }

@@ -194,11 +194,11 @@ int main(int argc, char* argv[]) {
   h_(Dphi_j_j_30)
   h_(m_jj_30)
 
-  h_(HT_30)
+  h_(HT_jets_30) h_(HT_30)
 
   h_(sumTau_yyj_30) h_(maxTau_yyj_30)
 
-  h_(old_H_pT) h_(old_jet1_pT)
+  h_(fine_H_pT) h_(fine_jet1_pT)
 
   // ================================================================
 
@@ -299,7 +299,7 @@ int main(int argc, char* argv[]) {
     const double H_pT = higgs->Pt();
     const double H_y  = higgs->Rapidity();
     h_pT_yy(H_pT);
-    h_old_H_pT(H_pT);
+    h_fine_H_pT(H_pT);
     h_yAbs_yy(std::abs(H_y));
 
     const double A1_y = A1->Rapidity(), A2_y = A2->Rapidity();
@@ -318,8 +318,10 @@ int main(int argc, char* argv[]) {
       h_jet_pT  [i](jets_pT[i]);
       h_jet_yAbs[i](std::abs(jets_y[i]));
     }
-    h_old_jet1_pT(jets_pT[0]);
-    h_HT_30(std::accumulate(jets_pT.begin(),jets_pT.end(),0.));
+    h_fine_jet1_pT(jets_pT[0]);
+    const double HT_jets_30 = std::accumulate(jets_pT.begin(),jets_pT.end(),0.);
+    h_HT_jets_30(HT_jets_30);
+    h_HT_30(HT_jets_30 + H_pT);
 
     const auto jets_tau = fj_jets | [=](const auto& jet){ return tau(jet,H_y); };
     h_maxTau_yyj_30(*std::max_element(jets_tau.begin(),jets_tau.end()));
@@ -341,6 +343,11 @@ int main(int argc, char* argv[]) {
   auto fout = std::make_unique<TFile>(output_file_name,"recreate");
   if (fout->IsZombie()) return 1;
 
+  auto h_N_j_30_integrated = h_N_j_30;
+  h_N_j_30_integrated.integrate_left();
+  auto h_N_j_50_integrated = h_N_j_50;
+  h_N_j_50_integrated.integrate_left();
+
   // write root historgrams
   nlo_multibin::wi = 0;
   for (const auto& _w : _weights) {
@@ -358,24 +365,17 @@ int main(int argc, char* argv[]) {
 
     auto* h_N_j_30_excl = to_root(h_N_j_30,"N_j_30_excl");
     excl_labels(h_N_j_30_excl,true);
-    h_N_j_30.integrate_left();
-    auto* h_N_j_30_incl = to_root(h_N_j_30,"N_j_30_incl");
+    auto* h_N_j_30_incl = to_root(h_N_j_30_integrated,"N_j_30_incl");
     h_N_j_30_incl->SetEntries( h_N_j_30_excl->GetEntries() );
     excl_labels(h_N_j_30_excl,false);
 
     auto* h_N_j_50_excl = to_root(h_N_j_50,"N_j_50_excl");
     excl_labels(h_N_j_50_excl,true);
-    h_N_j_50.integrate_left();
-    auto* h_N_j_50_incl = to_root(h_N_j_50,"N_j_50_incl");
+    auto* h_N_j_50_incl = to_root(h_N_j_50_integrated,"N_j_50_incl");
     h_N_j_50_incl->SetEntries( h_N_j_50_excl->GetEntries() );
     excl_labels(h_N_j_50_excl,false);
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
-
-    // struct {
-    //   inline auto weight(const nlo_multibin& b) const noexcept { return b.n; }
-    // } store_n;
-    // for (auto& h : re_hist<1>::all) to_root(*h,"n_"+h.name,store_n);
 
     ++nlo_multibin::wi;
   }

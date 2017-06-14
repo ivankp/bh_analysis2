@@ -388,14 +388,17 @@ int main(int argc, char* argv[]) {
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << '\n' << endl;
 
+  auto h_Njets_integrated = h_Njets;
+  h_Njets_integrated.integrate_left();
+
   // Open output root file for histograms
-  auto fout = std::make_unique<TFile>(output_file_name,"recreate");
-  if (fout->IsZombie()) return 1;
+  TFile fout(output_file_name,"recreate","hist",209);
+  if (fout.IsZombie()) return 1;
 
   // write root historgrams
   nlo_multibin::wi = 0;
   for (const auto& _w : _weights) {
-    auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
+    auto* dir = fout.mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
       : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
       : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
@@ -408,8 +411,7 @@ int main(int argc, char* argv[]) {
     using ivanp::root::slice_to_root;
 
     auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
-    h_Njets.integrate_left();
-    auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+    auto* h_Njets_incl = to_root(h_Njets_integrated,"jets_N_incl");
     h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
@@ -417,12 +419,12 @@ int main(int argc, char* argv[]) {
     ++nlo_multibin::wi;
   }
 
-  fout->cd();
+  fout.cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);
   h_N->SetBinContent(1,ncount);
-  h_N->SetEntries(num_selected);
-  fout->Write();
-  cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
+  h_N->SetEntries(num_events);
+  fout.Write();
+  cout << "\n\033[32mOutput\033[0m: " << fout.GetName() << endl;
 
   return 0;
 }

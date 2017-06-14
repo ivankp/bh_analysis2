@@ -4,37 +4,44 @@ import sys, os, sqlite3
 from subprocess import Popen, PIPE
 from collections import defaultdict
 
+out = '/home/ivanp/work/bh_analysis2/hgam'
+exe = 'hist_hgam'
+chunk_size = 20
+
 path = '/home/ivanp/work/bh_analysis2'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
+def mkdir(d):
+    if not os.path.isdir(d):
+        os.makedirs(d)
+for d in ['/condor','/raw']:
+    mkdir(out+d)
+
 sets = defaultdict(list)
 cur.execute('''
-SELECT particle,njets,part,scales,pdf,weights.dir,ntuples.dir,ntuples.file
+SELECT particle,njets,part,
+       ntuples.dir,ntuples.file,
+       weights.dir,weights.file
 FROM weights JOIN ntuples ON weights.ntuple_id = ntuples.id
 WHERE weights.info=\'hgam 2017\'
 ''')
 for f in cur.fetchall():
-    if not os.path.isfile(f[5]+'/'+f[7]):
-        sets[f[0:6]].append(f[6]+'/'+f[7])
+    sets[f[0:3]].append((f[3]+'/'+f[4],f[5]+'/'+f[6]))
 
 def chunks(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i + n]
 
-def condor(s,i,ff):
-    base = '{}{}j{}'.format(*s[:3]) + '_' + str(i)
-    print base
-    out = s[5]
-    if not os.path.isdir(out + '/condor/'):
-        os.makedirs(out + '/condor/')
-    base = out + '/condor/' + base
+def condor(s,i,g):
+    name = '{}{}j{}'.format(*s[:3]) + '_' + str(i)
+    print name
+    base = out + '/condor/' + name
     with open(base+'.sh','w') as f:
         f.write('#!/bin/bash\n')
-        f.write('cd {}\n'.format(out))
-        f.write(path+'/bin/reweigh --pdf-variations' +\
-                ' -o '+out + ' --scale='+s[3] + ' --pdf='+s[4] +\
-                ' -i ' + ' '.join(ff) + '\n')
+        f.write(path+'/bin/' + exe + ' {}j '.format(s[1]) +\
+                'out:' + out + '/raw/' + name + '.root \\\n' +\
+                ' \\\n'.join([ 'bh {} w {}'.format(*ff) for ff in g ]))
     os.chmod(base+'.sh',0o775)
     return '''\
 Universe   = vanilla
@@ -47,15 +54,17 @@ Queue
 '''.format(base)
 
 for s in sorted(
-    [ k+(chunks(f,20),) for k, f in sets.iteritems() ],
-    key = lambda tup: tup[0:3]
+    [ k+(chunks(f,chunk_size),) for k, f in sets.iteritems() ],
+    key = lambda tup: tup[:3]
 ):
     i = 1
-    for ff in s[-1]:
+    for g in s[-1]:
+        # condor(s,i,g)
         p = Popen(('condor_submit','-'), stdin=PIPE, stdout=PIPE)
-        p.stdin.write( condor(s,i,ff) )
+        p.stdin.write( condor(s,i,g) )
         p.communicate()
         p.stdin.close()
 
         i += 1
+
 

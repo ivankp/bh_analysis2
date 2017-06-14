@@ -482,6 +482,9 @@ int main(int argc, char* argv[]) {
   auto fout = std::make_unique<TFile>(output_file_name,"recreate");
   if (fout->IsZombie()) return 1;
 
+  auto h_Njets_integrated = h_Njets;
+  h_Njets_integrated.integrate_left();
+
   // write root historgrams
   multibin::wi = 0;
   for (const auto& _w : _weights) {
@@ -498,8 +501,7 @@ int main(int argc, char* argv[]) {
     using ivanp::root::slice_to_root;
 
     auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
-    h_Njets.integrate_left();
-    auto* h_Njets_incl = to_root(h_Njets,"jets_N_incl");
+    auto* h_Njets_incl = to_root(h_Njets_integrated,"jets_N_incl");
     h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);

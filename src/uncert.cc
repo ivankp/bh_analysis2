@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <array>
 #include <stdexcept>
 
 #include <TNamed.h>
@@ -25,11 +26,11 @@ using ivanp::cat;
 template <typename...> struct bad_type;
 
 using dirs_t = std::vector<ivanp::named_ptr<TDirectory>>;
-template <typename T>
-using hists_t = std::vector<std::pair<std::string,std::vector<T>>>;
+using hists_t = std::vector<std::pair< TH1*,
+                                       std::vector<std::vector<double>> >>;
 
 auto get_values(const dirs_t& dirs) {
-  hists_t<std::vector<double>> hists;
+  hists_t hists;
   for (const auto& dir : dirs) {
     unsigned hi = 0;
     for (auto* obj : *dir->GetListOfKeys()) {
@@ -37,13 +38,14 @@ auto get_values(const dirs_t& dirs) {
       TClass *key_class = TClass::GetClass(key->GetClassName());
       if (key_class->InheritsFrom(TH1::Class())) { // is TH1
         TH1 *h = static_cast<TH1*>(key->ReadObj());
-        const char* name = h->GetName();
         const int nbins = h->GetNbinsX()+2;
         auto it = std::find_if(hists.begin(),hists.end(),
-          [name](const auto& pair){ return pair.first == name; });
+          [h](const auto& pair){
+            return !strcmp(pair.first->GetName(),h->GetName());
+          });
 
         if (it==hists.end()) { // reserve memory
-          hists.emplace_back(name,decltype(it->second)(nbins));
+          hists.emplace_back(h,decltype(it->second)(nbins));
           it = --hists.end();
           for (auto& v : it->second) v.resize(dirs.size());
         }
@@ -63,7 +65,31 @@ auto get_values(const dirs_t& dirs) {
       "\' (",hh.second.size()," instead of ",count,')'
     ));
   }
-  return std::move(hists);
+  return hists;
+}
+
+auto scale_unc(const hists_t& hists) {
+  struct hvar { TH1F *up, *down; };
+  std::vector<hvar> hs;
+  hs.reserve(hists.size());
+
+  for (const auto& hh : hists) {
+    const TH1 *h1 = hh.first;
+    TH1F *h2 = new TH1F(
+      h1->GetName(), h1->GetTitle(),
+      h1->GetNbinsX(), h1->GetXaxis()->GetXbins()->GetArray()
+    );
+    hs.push_back({h2,static_cast<TH1F*>(h2->Clone())});
+    const auto& hb = hs.back();
+    for (const auto& h : hh.second) {
+      for (int i=h.size(); i; ) { --i;
+        const auto minmax = std::minmax_element(h.begin(),h.end());
+        (*hb.up  )[i] = *minmax.second;
+        (*hb.down)[i] = *minmax.first;
+      }
+    }
+  }
+  return hs;
 }
 
 int main(int argc, char* argv[]) {
@@ -71,6 +97,7 @@ int main(int argc, char* argv[]) {
     cout << "usage: " << argv[0] << " in.root out.root" << endl;
     return 1;
   }
+  TH1::AddDirectory(false);
 
   TFile fin(argv[1]);
   if (fin.IsZombie()) return 1;
@@ -119,7 +146,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  const auto scales_value = get_values(scales);
-  const auto   pdfs_value = get_values(pdfs);
+  const auto _scale_unc = scale_unc(get_values(scales));
+  const auto   _pdf_unc =   pdf_unc(get_values(pdfs));
   
 }

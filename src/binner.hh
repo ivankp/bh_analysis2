@@ -10,7 +10,7 @@
 #include <stdexcept>
 
 #include "axis.hh"
-#include "default_bin_filler.hh"
+#include "bin_filler.hh"
 #include "utility.hh"
 #include "sequence_traits.hh"
 

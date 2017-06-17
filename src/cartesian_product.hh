@@ -1,5 +1,5 @@
-#ifndef IVANP_CARTESIAN_PRODUCT_APPLY_HH
-#define IVANP_CARTESIAN_PRODUCT_APPLY_HH
+#ifndef IVANP_CARTESIAN_PRODUCT_HH
+#define IVANP_CARTESIAN_PRODUCT_HH
 
 #include <utility>
 #include <tuple>
@@ -25,7 +25,7 @@ bool increment_ranges(const B& begins, std::pair<T,T>& r, std::pair<TT,TT>&... r
 }
 
 template <typename F, typename... R>
-void cartesian_product_apply(F&& f, std::pair<R,R>... ranges) {
+void cartesian_product(F&& f, std::pair<R,R>... ranges) {
   const auto begins = std::make_tuple(ranges.first...);
   for (;;) {
     f(ranges.first...); // apply

@@ -18,9 +18,8 @@ struct named_ptr {
   named_ptr(): p(nullptr), name() { }
   named_ptr(const named_ptr& n) = default;
   named_ptr(named_ptr&& n) = default;
-  template <typename P, typename N>
-  named_ptr(P&& ptr, N&& name)
-  : p(std::forward<P>(ptr)), name(std::forward<N>(name)) { }
+  template <typename Name>
+  named_ptr(T* ptr, Name&& name): p(ptr), name(std::forward<Name>(name)) { }
 
   inline type& operator*() const noexcept { return *p; }
   inline type* operator->() const noexcept { return p; }

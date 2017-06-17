@@ -31,7 +31,7 @@
 #include "re_axes.hh"
 #include "parse_args.hh"
 #include "string_alg.hh"
-#include "cartesian_product_apply.hh"
+#include "cartesian_product.hh"
 
 #define test(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -170,7 +170,7 @@ struct isp_split {
     gg.reserve(n);
     gq.reserve(n);
     qq.reserve(n);
-    ivanp::cartesian_product_apply(
+    ivanp::cartesian_product(
       [&,this](auto... args){ f(*this,args...); }, // bind first
       std::make_pair(I{},i)... );
   }

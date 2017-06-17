@@ -14,10 +14,10 @@ void branch(TTree& tree, const char* name, T* addr) {
 
 struct entry {
   Int_t           nparticle;
-  Float_t        px[8]; //[nparticle]
-  Float_t        py[8]; //[nparticle]
-  Float_t        pz[8]; //[nparticle]
-  Float_t        E [8]; //[nparticle]
+  Float_t         px[8]; //[nparticle]
+  Float_t         py[8]; //[nparticle]
+  Float_t         pz[8]; //[nparticle]
+  Float_t         E [8]; //[nparticle]
   Int_t           kf[8];
   Double_t        alphas;
   Double_t        weight2;

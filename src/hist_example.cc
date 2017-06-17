@@ -13,8 +13,6 @@
 #include <TTreeReader.h>
 #include <TTreeReaderValue.h>
 #include <TTreeReaderArray.h>
-#include <TDirectory.h>
-#include <TKey.h>
 #include <TH1.h>
 #include <TLorentzVector.h>
 
@@ -259,10 +257,10 @@ int main(int argc, char* argv[]) {
   cout << "ncount: " << ncount << endl;
 
   // Open output root file for histograms
-  auto fout = std::make_unique<TFile>(argv[1],"recreate");
-  if (fout->IsZombie()) return 1;
+  TFile fout(argv[1],"recreate");
+  if (fout.IsZombie()) return 1;
 
-  fout->mkdir("weight_JetAntiKt4")->cd();
+  fout.mkdir("weight_JetAntiKt4")->cd();
 
   // write root historgrams
   using ivanp::root::to_root;
@@ -275,12 +273,12 @@ int main(int argc, char* argv[]) {
 
   for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-  fout->cd();
+  fout.cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);
   h_N->SetBinContent(1,ncount);
-  h_N->SetEntries(num_selected);
-  fout->Write();
-  cout << "\033[32mOutput\033[0m: " << fout->GetName() << endl;
+  h_N->SetEntries(num_events);
+  fout.Write();
+  cout << "\033[32mOutput\033[0m: " << fout.GetName() << endl;
 
   return 0;
 }

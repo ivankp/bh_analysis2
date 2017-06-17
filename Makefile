@@ -47,6 +47,9 @@ L_check_tree := $(ROOT_LIBS) -lTreePlayer
 C_reweigh := $(ROOT_CFLAGS)
 L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS) -lboost_program_options
 
+C_uncert := $(ROOT_CFLAGS)
+L_uncert := $(ROOT_LIBS) $(LHAPDF_LIBS)
+
 C_reweighter := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 
 C_reweigh1 := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
@@ -55,8 +58,11 @@ L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
 C_reweigh_threaded := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
 L_reweigh_threaded := $(ROOT_LIBS) $(LHAPDF_LIBS)
 
-C_scale_dep := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_scale_dep := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
+C_dep_scale := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_dep_scale := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
+
+C_dep_R_scale := $(ROOT_CFLAGS) $(FJ_CFLAGS)
+L_dep_R_scale := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
 
 C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
@@ -93,8 +99,8 @@ BLD := .build
 SRCS := $(shell find $(SRC) -type f -name '*.cc')
 DEPS := $(patsubst $(SRC)%.cc,$(BLD)%.d,$(SRCS))
 
-GREP_EXES := grep -rl '^ *int \+main *(' $(SRC)
-EXES := $(patsubst $(SRC)%.cc,$(BIN)%,$(filter %.cc,$(shell $(GREP_EXES))))
+GREP_EXES := grep -rl '^[[:blank:]]*int \+main *(' $(SRC)
+EXES := $(patsubst $(SRC)%.cc,$(BIN)%,$(shell $(GREP_EXES)))
 
 HISTS := $(filter $(BIN)/hist_%,$(EXES))
 
@@ -110,7 +116,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
 endif
 
 $(HISTS): $(BLD)/re_axes.o
-$(BIN)/reweigh $(BIN)/scale_dep: $(BLD)/reweighter.o
+$(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale: $(BLD)/reweighter.o
 $(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam: \
   $(BLD)/Higgs2diphoton.o
 

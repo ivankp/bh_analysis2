@@ -31,7 +31,7 @@
 #include "parse_args.hh"
 #include "nlo_multibin.hh"
 
-#define test(var) \
+#define TEST(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
 
 #define _STR(S) #S

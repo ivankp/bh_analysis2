@@ -192,6 +192,7 @@ int main(int argc, char* argv[]) {
 
   h_(Dy_j_j_30  )
   h_(Dphi_j_j_30)
+  h_(Dphi_j_j_30_signed)
   h_(m_jj_30)
 
   h_(HT_jets_30) h_(HT_30)
@@ -329,8 +330,11 @@ int main(int argc, char* argv[]) {
 
     if (njets < 2) continue; // 2222222222222222222222222222222222222
 
+    const double phi1 = fj_jets[0].phi(), phi2 = fj_jets[1].phi();
+
     h_Dy_j_j_30(std::abs(jets_y[0]-jets_y[1]));
-    h_Dphi_j_j_30(dphi(fj_jets[0].phi(),fj_jets[1].phi()));
+    h_Dphi_j_j_30(dphi(phi1,phi2));
+    h_Dphi_j_j_30_signed(dphi_signed(phi1,phi2,jets_y[0],jets_y[1]));
     h_m_jj_30((fj_jets[0]+fj_jets[1]).m());
 
   } // END EVENT LOOP

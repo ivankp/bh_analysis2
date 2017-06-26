@@ -428,6 +428,11 @@ int main(int argc, char* argv[]) {
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     hist_bin::weight = *_weight; // Read weight
 
+    if (!std::isfinite(hist_bin::weight)) {
+      cout << hist_bin::weight << endl;
+      continue;
+    }
+
 #ifdef NLO
     // Keep track of multi-entry events -----------------------------
     hist_bin::current_id = *_id;

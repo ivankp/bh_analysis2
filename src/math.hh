@@ -38,16 +38,17 @@ constexpr bool eq(const T& x1, const T& x, const TT&... xx) noexcept {
 }
 
 // return absolute value of phi separation
-template <typename T> [[ gnu::const ]]
-inline T dphi(T phi1, T phi2) noexcept {
-  static constexpr T twopi = M_PI*2;
-  T _dphi = phi1 - phi2;
+[[ gnu::const ]]
+inline double dphi(double phi1, double phi2) noexcept {
+  static constexpr double twopi = M_PI*2;
+  double _dphi = phi1 - phi2;
   if (__builtin_expect(_dphi < 0.,0)) _dphi = -_dphi;
   return ( __builtin_expect(_dphi > M_PI,0) ? twopi-_dphi : _dphi );
 }
 
-template <typename T> [[ gnu::const ]]
-inline T deltaR(T eta1, T eta2, T phi1, T phi2) noexcept {
+[[ gnu::const ]]
+inline double deltaR(double eta1, double eta2, double phi1, double phi2)
+noexcept {
   return std::sqrt(sq(eta1-eta2,dphi(phi1,phi2)));
 }
 
@@ -58,6 +59,17 @@ inline double tau(const J& jet, double higgs_y) noexcept {
 template <typename P>
 inline double pTt(const P& a, const P& b) noexcept {
   return std::abs( a[0]*b[1]-b[0]*a[1] )/( std::sqrt(sq(a[0]+b[0],a[1]+b[1]))*2 );
+}
+
+[[ gnu::const ]]
+inline double dphi_signed(double phi1, double phi2, double rap1, double rap2)
+noexcept {
+  static constexpr double twopi = M_PI*2;
+  double _dphi = phi1 - phi2;
+  if (rap1 < rap2) _dphi = -_dphi;
+  while (_dphi >= M_PI) _dphi -= twopi;
+  while (_dphi < -M_PI) _dphi += twopi;
+  return _dphi;
 }
 
 template <typename T1, typename T2>

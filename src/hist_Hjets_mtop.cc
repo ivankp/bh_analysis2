@@ -76,10 +76,8 @@ struct dijet {
 
 enum isp_t { any_isp=0, gg, gq, qq };
 isp_t get_isp(Int_t id1, Int_t id2) noexcept {
-  bool g1 = (id1 == 21);
-  bool g2 = (id2 == 21);
-  if (g1 && g1) return gg;
-  else if ((!g1) && (!g2)) return qq;
+  const bool g1 = (id1 == 21), g2 = (id2 == 21);
+  if (g1 == g2) return g1 ? gg : qq;
   else return gq;
 }
 

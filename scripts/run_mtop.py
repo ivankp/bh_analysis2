@@ -13,7 +13,7 @@ def until(l,total,pred):
     return (s,o)
 
 path = '/home/ivanp/work/bh_analysis2'
-db  = sqlite3.connect(path+'/sql/test.db')
+db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
 select = 'SELECT dir,file,nevents FROM ntuples WHERE'

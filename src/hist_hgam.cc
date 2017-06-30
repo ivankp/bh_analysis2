@@ -199,6 +199,8 @@ int main(int argc, char* argv[]) {
 
   h_(sumTau_yyj_30) h_(maxTau_yyj_30)
 
+  h_(pT_yyjj) h_(Dphi_yy_jj)
+
   h_(fine_H_pT) h_(fine_jet1_pT)
 
   // ================================================================
@@ -330,12 +332,24 @@ int main(int argc, char* argv[]) {
 
     if (njets < 2) continue; // 2222222222222222222222222222222222222
 
+    const TLorentzVector jj(
+      fj_jets[0][0] + fj_jets[1][0],
+      fj_jets[0][1] + fj_jets[1][1],
+      fj_jets[0][2] + fj_jets[1][2],
+      fj_jets[0][3] + fj_jets[1][3]
+    );
+
     const double phi1 = fj_jets[0].phi(), phi2 = fj_jets[1].phi();
 
     h_Dy_j_j_30(std::abs(jets_y[0]-jets_y[1]));
     h_Dphi_j_j_30(dphi(phi1,phi2));
     h_Dphi_j_j_30_signed(dphi_signed(phi1,phi2,jets_y[0],jets_y[1]));
-    h_m_jj_30((fj_jets[0]+fj_jets[1]).m());
+    h_m_jj_30(jj.M());
+
+    const TLorentzVector yyjj = jj + *higgs;
+
+    h_pT_yyjj(yyjj.Pt());
+    h_Dphi_yy_jj(dphi(higgs->Phi(),jj.Phi()));
 
   } // END EVENT LOOP
   // ================================================================

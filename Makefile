@@ -67,6 +67,9 @@ L_dep_R_scale := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
 C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
 L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
 
+C_hist_Hjets_yy := $(C_hist_Hjets)
+L_hist_Hjets_yy := $(L_hist_Hjets)
+
 C_hist_Hjets_mtop := $(C_hist_Hjets)
 L_hist_Hjets_mtop := $(L_hist_Hjets)
 
@@ -117,7 +120,7 @@ endif
 
 $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale: $(BLD)/reweighter.o
-$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam: \
+$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam $(BIN)/hist_Hjets_yy: \
   $(BLD)/Higgs2diphoton.o
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)

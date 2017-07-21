@@ -17,29 +17,37 @@ N = 30000000
 locale.setlocale(locale.LC_ALL, '')
 print 'N = ' + locale.format('%d', N, grouping=True)
 
-exe = 'hist_Hjets'
+exe = 'hist_Hjets_yy'
 path = '/home/ivanp/work/bh_analysis2'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
-for njets in [1,2,3]:
+for njets in [2]:
     for part in ['B','RS','I','V']:
-        cur.execute('SELECT dir,file,nevents FROM ntuples WHERE'\
-                    ' not instr(info,\'mtop\') and'\
-                    ' not instr(info,\'ED\') and'\
-                    ' not instr(info,\'GGFHTLS\') and'\
-                    ' particle=\'H\' and energy=13' +\
+        # cur.execute('SELECT dir,file,nevents FROM ntuples WHERE'\
+        #             ' not instr(info,\'mtop\') and'\
+        #             ' not instr(info,\'ED\') and'\
+        #             ' not instr(info,\'GGFHTLS\') and'\
+        #             ' particle=\'H\' and energy=13' +\
+        #             ' and njets={} and part=\'{}\''.format(njets,part))
+        cur.execute('SELECT ntuples.dir,ntuples.file,nevents,'\
+                    'weights.dir,weights.file FROM ntuples'\
+                    ' JOIN weights ON weights.ntuple_id = ntuples.id'\
+                    ' WHERE'\
+                    ' weights.scales=\'HT1\''\
+                    ' and particle=\'H\' and energy=13' +\
                     ' and njets={} and part=\'{}\''.format(njets,part))
         ntuples = cur.fetchall()
 
         ntuples = until(ntuples, N, lambda x: x[2])[1]
 
-        name = path+'/out/default_{}j_{}'.format(njets,part)
+        name = path+'/out/gionata_{}j_{}'.format(njets,part)
         with open(name+'.out','w') as out, open(name+'.err','w') as err:
-            p = Popen(
-                [ path+'/bin/'+exe, 'config/Hjets_coarser.bins',
+            cmd = \
+                [ path+'/bin/'+exe, 'config/gionata.bins',
                   '{}j'.format(njets), 'out:'+name+'_raw.root' ] +\
-                [ x[0]+'/'+x[1] for x in ntuples ],
-                stdout=out, stderr=err)
+                [ arg for x in ntuples
+                      for arg in ['bh',x[0]+'/'+x[1],'w',x[3]+'/'+x[4]] ]
+            p = Popen(cmd, stdout=out, stderr=err)
         print name
 

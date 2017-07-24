@@ -1,21 +1,29 @@
-import os
+import os, yaml
 from collections import defaultdict
 
-# read enough files to precess at least N events
-# 0 means process all
-N = 0
-
-def getN_impl(n_str):
+def parse_num_events(n_str):
     if len(n_str) > 1:
         s = n_str[-1]
         if s=='M': return int(n_str[:-1])*1000000;
         if s=='k': return int(n_str[:-1])*1000;
     return int(n_str)
 
-def getN(n_str):
-    global N
-    N = getN_impl(n_str)
-    print 'N = {}'.format(N)
+class Conf:
+    def __init__(self): pass
+    def __call__(self, name):
+        with open(name) as f:
+            self.yaml = yaml.load(f)
+        self['exe'] = os.path.join(self['path'],'bin',self['exe'])
+        self['database'] = os.path.join(self['path'],self['database'])
+        # self['out'] = os.path.join(self['path'],self['out'])
+        if type(self['num_events']) is str:
+            self['num_events'] = parse_num_events(self['num_events'])
+    def __getitem__(self, key):
+        return self.yaml[key]
+    def __setitem__(self, key, value):
+        self.yaml[key] = value
+
+conf = Conf()
 
 class collector:
     def __init__(self):
@@ -23,14 +31,14 @@ class collector:
         self.nevents = 0
 
     def add(self, ne, ntuple): # ne is number of events
-        if N==0 or self.nevents < N:
+        if conf['num_events']==0 or self.nevents < conf['num_events']:
             self.nevents += ne
             self.files.append((ntuple,ne))
 
-    def group(self, ng, key=None): # ng is group size
+    def group(self, ng, pred=None): # ng is group size
         self.gs = [] # groups
-        if key!=None:
-            self.files = sorted(self.files, key=lambda f: key(f[0]))
+        if pred!=None:
+            self.files = sorted(self.files, key=lambda f: pred(f[0]))
         g = []
         n = 0
         for f in self.files:
@@ -47,11 +55,11 @@ class collector:
 
 datasets = defaultdict(collector)
 
-condor_sh_str = os.path.dirname(os.path.realpath(__file__))+'/condor.sh'
-def condor_sh():
-    return condor_sh_str
+condor_sh = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),'condor.sh')
 
-def make_script(name, exe, args, recursive=True):
+def make_script(name, args, recursive=True):
+    exe = conf['exe']
     with open(name,'w') as f:
         f.write('#!/bin/bash\n')
         if recursive:
@@ -60,7 +68,7 @@ if [ ! -x \"{}\" ]; then
   {} {}
   exit
 fi
-'''.format(exe,condor_sh_str,name))
+'''.format(exe,condor_sh,name))
         f.write('ldd '+exe+'\n\n')
         f.write(exe+' '+args+'\n')
     os.chmod(name,0o775)

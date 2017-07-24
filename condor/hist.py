@@ -10,8 +10,8 @@ except ValueError:
     print "Invalid argument for number of events:", sys.argv[1]
     sys.exit(1)
 
-exe = 'hist_'
-group_size = 100000
+exe = 'hist_Hjets'
+group_size = 1000000
 path = '/home/ivanp/work/bh_analysis2'
 # out = '/msu/data/t3work8/ivanp/scale_dep/HT2'
 out = 'test'
@@ -29,7 +29,7 @@ WHERE energy=13 and particle=\'H\' and instr(info,\'ED\')
 and part=\'V\'
 ''')
 for f in cur.fetchall():
-    dset = f['particle']+f['njets']+'j_'+f['part']
+    dset = f['particle']+str(f['njets'])+'j_'+f['part']
     ntuple = ( f['dir'], f['file'], f['id'] )
     datasets[dset].add( f['nevents'], ntuple )
 
@@ -57,26 +57,5 @@ for g in sorted(groups, key=lambda g: g[0]):
     args = ' '.join([ f[0]+'/'+f[1] for f in g[2] ])
     make_script(script, exe, args)
         
-    p = Popen((condor_sh(),script))
-
-# for f in sorted(
-#     [ k+f for k,fs in datasets.iteritems() for f in fs.files ],
-#     key = lambda tup: (tup[4],tup[0],tup[1])
-# ):
-#     print '{}j {:<2}: {}'.format(f[0],f[1],f[3])
-#     print f
-#
-#     base = f[3][:-5]
-#     if os.path.isfile(out+'/'+f[3]):
-#         print 'already exists'
-#         continue
-
-    # make_script(out+'/'+base+'.sh',exe,'')
-
-    # p = Popen(('condor_submit','-'), stdin=PIPE, stdout=PIPE)
-    # p.stdin.write( condor(base,
-    #         '\\$OUT_PATH:={} '.format(out) +\
-    #         '\\$NJETS:={} \\$NLOPART:={} \\$SID:={}'.format(f[0],f[1],f[4])))
-    # p.communicate()
-    # p.stdin.close()
+    p = Popen((condor_sh,script))
 

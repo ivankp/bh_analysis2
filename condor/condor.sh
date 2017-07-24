@@ -27,5 +27,5 @@ Log        = ${base}.log
 getenv = True
 Queue
 " > ${base}.condor
-#| condor_submit - > /dev/null
+# | condor_submit - > /dev/null
 

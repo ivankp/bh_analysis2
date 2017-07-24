@@ -1,0 +1,8 @@
+---
+exe: hist_Hjets
+num_events: 500k
+num_jobs: 100
+path: /home/ivanp/work/bh_analysis2
+out: test
+database: sql/ntuples.db
+select: energy=13 and particle='H' and instr(info,'ED') and part='V'

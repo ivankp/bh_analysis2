@@ -1,12 +1,12 @@
 ---
 exe: hist_Hjets
-num_events: 0
+max_num_events: 0
 num_jobs: 100
 path: /home/ivanp/work/bh_analysis2
 out: test
 database: sql/ntuples.db
 query: >-
-    SELECT particle, njets, part, nevents,
+    SELECT particle, njets, part, nentries,
            ntuples.dir, ntuples.file,
            weights.dir, weights.file
     FROM ntuples JOIN weights ON weights.ntuple_id = ntuples.id

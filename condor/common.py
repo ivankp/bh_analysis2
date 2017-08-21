@@ -16,8 +16,8 @@ class Conf:
         self['exe'] = os.path.join(self['path'],'bin',self['exe'])
         self['database'] = os.path.join(self['path'],self['database'])
         # self['out'] = os.path.join(self['path'],self['out'])
-        if type(self['num_events']) is str:
-            self['num_events'] = parse_num_events(self['num_events'])
+        if type(self['max_num_events']) is str:
+            self['max_num_events'] = parse_num_events(self['max_num_events'])
     def __getitem__(self, key):
         return self.yaml[key]
     def __setitem__(self, key, value):
@@ -31,7 +31,7 @@ class collector:
         self.nevents = 0
 
     def add(self, ne, ntuple): # ne is number of events
-        if conf['num_events']==0 or self.nevents < conf['num_events']:
+        if conf['max_num_events']==0 or self.nevents < conf['max_num_events']:
             self.nevents += ne
             self.files.append((ntuple,ne))
 
@@ -44,6 +44,7 @@ class collector:
         for f in self.files:
             n += f[1]
             g.append(f[0])
+            # g.append(f)
             if n >= ng:
                 self.gs.append(g)
                 g = []

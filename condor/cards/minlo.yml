@@ -1,9 +1,9 @@
 ---
 exe: hist_Hjets
 max_num_events: 0
-num_jobs: 100
+num_jobs: 50
 path: /home/ivanp/work/bh_analysis2
-out: test
+out: test2
 database: sql/ntuples.db
 query: >-
     SELECT particle, njets, part, nentries,
@@ -12,5 +12,5 @@ query: >-
     FROM ntuples JOIN weights ON weights.ntuple_id = ntuples.id
     WHERE energy=13 and particle='H' and scales='minlo HT2'
 dset_form: "{}{}j_{}"
-args_form: "bh {}/{} w {}/{}"
+args_form: "\\\nbh {}/{} \\\nw {}/{}"
 args: "{njets}j antikt4 out:{out}/{base}.root"

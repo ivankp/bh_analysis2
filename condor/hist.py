@@ -102,16 +102,16 @@ i = 0
 args_form = conf['args_form']
 for g in groups:
     i += 1
-    base = '{}_{}'.format(g[1], g[0])
+    base = '{}_{}'.format(*g[:2])
 
     print '{:3}/{} : {} : {}'.format(i,ng,base,len(g[2]))
 
-    # script = conf['out']+'/'+base+'.sh'
-    #
-    # args_dict = {'base': base, 'njets': base[1]} # FIXME
-    # args = conf['args'].format(**dict(conf.yaml.items()+args_dict.items()))
-    # args += ' '+ ' '.join([ args_form.format(*f) for f in g[2] ])
-    # make_script(script, args)
+    script = conf['out']+'/'+base+'.sh'
+
+    args_dict = {'base': base, 'njets': base[1]} # FIXME
+    args = conf['args'].format(**dict(conf.yaml.items()+args_dict.items()))
+    args += ' '+ ' '.join([ args_form.format(*f) for f in g[2] ])
+    make_script(script, args)
 
     # p = Popen((condor_sh,script))
 

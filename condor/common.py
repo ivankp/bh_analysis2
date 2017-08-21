@@ -59,19 +59,20 @@ datasets = defaultdict(collector)
 condor_sh = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),'condor.sh')
 
-def make_script(name, args, recursive=True):
-    exe = conf['exe']
+def make_script(name, args):
     with open(name,'w') as f:
-        f.write('#!/bin/bash\n')
-        if recursive:
-            f.write('''
-if [ ! -x \"{}\" ]; then
-  {} {}
+        f.write('''#!/bin/bash
+
+exe={0}
+
+if [ ! -x \"$exe\" ]; then
+  >&2 echo "$(uname -n) does not see $exe"
   exit
 fi
-'''.format(exe,condor_sh,name))
-        f.write('ldd '+exe+'\n\n')
-        f.write(exe+' '+args+'\n')
-    os.chmod(name,0o775)
 
+ldd $exe
+
+$exe {1}
+'''.format(conf['exe'],args))
+    os.chmod(name,0o775)
 

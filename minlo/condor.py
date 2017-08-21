@@ -15,8 +15,9 @@ print 'N = ' + locale.format('%d', N, grouping=True) + '\n'
 
 sherpa = '/msu/data/t3work5/ivanp/4/sherpa/bin/Sherpa'
 path = '/home/ivanp/work/bh_analysis2'
-card = path+'/minlo/scale_dep.dat'
-out = '/msu/data/t3work8/ivanp/scale_dep/HT2'
+card = path+'/minlo/Run.dat'
+# out = '/msu/data/t3work8/ivanp/scale_dep/HT2'
+out = '/msu/data/t3work8/ivanp/weights/minlo'
 db  = sqlite3.connect(path+'/sql/ntuples.db')
 cur = db.cursor()
 
@@ -38,7 +39,7 @@ sets = defaultdict(collector)
 cur.execute('''
 SELECT nevents,njets,part,dir,file,sid
 FROM ntuples
-WHERE energy=13 and particle=\'H\' and instr(info,\'ED\')
+WHERE energy=13 and particle=\'H\' and instr(info,\'ED\') and part=\'V\'
 ''')
 for f in cur.fetchall():
     sets[f[1:3]].add( f[0], (f[3],f[4],f[5]) )

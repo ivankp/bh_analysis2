@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
 
   h_(HT_jets_30) h_(HT_30)
 
-  h_(sumTau_yyj_30) h_(maxTau_yyj_30)
+  h_(Tau_yyj1_30) h_(maxTau_yyj_30) h_(sumTau_yyj_30)
 
   h_(pT_yyjj_30) h_(Dphi_yy_jj_30)
 
@@ -327,6 +327,7 @@ int main(int argc, char* argv[]) {
     h_HT_30(HT_jets_30 + H_pT);
 
     const auto jets_tau = fj_jets | [=](const auto& jet){ return tau(jet,H_y); };
+    h_Tau_yyj1_30(jets_tau[0]);
     h_maxTau_yyj_30(*std::max_element(jets_tau.begin(),jets_tau.end()));
     h_sumTau_yyj_30(std::accumulate(jets_tau.begin(),jets_tau.end(),0.));
 

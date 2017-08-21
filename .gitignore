@@ -5,16 +5,19 @@
 !src/
 !config/
 !scripts/
+
 !sql/
-!condor/
-!minlo/
-
 sql/*
-
 !sql/Makefile
 !sql/*.py
 !sql/*.sh
 
+!condor/
 condor/*.pyc
 
+!minlo/
+# minlo/*
+# !minlo/*.py
+
 **.swp
+**screenlog.*

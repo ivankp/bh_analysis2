@@ -172,7 +172,9 @@ int main(int argc, char* argv[]) {
     const TObjArray *bb = weights_chain->GetListOfBranches();
     _weights.reserve(bb->GetEntriesFast());
     for (const auto* b : *bb) {
-      _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
+      const char* name = static_cast<const TBranch*>(b)->GetName();
+      if (!strcmp(name,"id")) continue;
+      _weights.emplace_back(reader,name);
     }
   }
   nlo_multibin::weights.resize(_weights.size());

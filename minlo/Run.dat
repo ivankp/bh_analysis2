@@ -10,8 +10,8 @@
   ERROR 0.05;
   RANDOM_SEED $RNDSEED1 $RNDSEED2;
 
-  # $SCALE_DEF:=0.25*sqr(sqrt(H_T2)-PPerp(p[2])+MPerp(p[2])); # ĤT'/2
-  $SCALE_DEF:=sqr(125.09+0.5*sqrt(H_T2)); # ĤT''/2
+  $SCALE_DEF:=0.25*sqr(sqrt(H_T2)-PPerp(p[2])+MPerp(p[2])); # ĤT'/2
+  # $SCALE_DEF:=sqr(125.09+0.5*sqrt(H_T2)); # ĤT''/2
 
   $PDF:=CT10nlo
   VARIATIONS [4.0,4.0],$PDF;

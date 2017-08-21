@@ -119,8 +119,11 @@ int main(int argc, char* argv[]) {
     const TObjArray *bb = weights_chain->GetListOfBranches();
     _weights.reserve(bb->GetEntriesFast()+1);
     _weights.emplace_back(reader,"weight2");
-    for (const auto* b : *bb)
-      _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
+    for (const auto* b : *bb) {
+      const auto name = static_cast<const TBranch*>(b)->GetName();
+      if (!strcmp(name,"id")) continue;
+      _weights.emplace_back(reader,name);
+    }
   } else {
     _weights.emplace_back(reader,"weight2");
   }

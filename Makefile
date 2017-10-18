@@ -1,71 +1,65 @@
+CXX := g++
 STD := -std=c++14
-DF := $(STD) -Isrc
-CF := $(STD) -Wall -Isrc
-LF := $(STD)
+CPPFLAGS := $(STD) -Iinclude
+CXXFLAGS := $(STD) -Wall -O3 -flto -Iinclude -fmax-errors=3
+# CXXFLAGS := $(STD) -Wall -g -Iinclude -fmax-errors=3
+LDFLAGS := $(STD) -O3 -flto
+LDLIBS :=
 
-ifneq (,${PREFIX})
-PREFIX := ${PREFIX}
-else
-PREFIX := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-endif
+SRC := src
+BIN := bin
+BLD := .build
+EXT := .cc
 
-ifeq (0, $(words $(findstring $(MAKECMDGOALS), rel)))
-# development mode
-CF += -O2 -g -fmax-errors=3
-else
-# release mode
-CF += -O3 -flto -funroll-loops -march=native -mfpmath=sse
-LF += -flto
-endif
+.PHONY: all clean
 
-NPROC := $(shell nproc --all)
+ifeq (0, $(words $(findstring $(MAKECMDGOALS), clean)))
 
-# ROOT_CFLAGS := $(shell root-config --cflags)
-ROOT_CFLAGS := -Wno-deprecated-declarations -pthread -m64
-ROOT_CFLAGS += -I$(shell root-config --incdir)
-ROOT_LIBS   := $(shell root-config --libs)
+LDFLAGS += $(shell sed -r 's/([^:]+)(:|$$)/ -L\1/g' <<< "$$LIBRARY_PATH")
+
+ROOT_CXXFLAGS := $(shell root-config --cflags)
+ROOT_LDLIBS   := $(shell root-config --libs)
+
+FJ_PREFIX   := $(shell fastjet-config --prefix)
+FJ_CXXFLAGS := -I$(FJ_PREFIX)/include
+FJ_LDLIBS   := -L$(FJ_PREFIX)/lib -Wl,-rpath=$(FJ_PREFIX)/lib -lfastjet
+
+LHAPDF_PREFIX   := $(shell lhapdf-config --prefix)
+LHAPDF_CXXFLAGS := $(shell lhapdf-config --cppflags)
+LHAPDF_LDLIBS   := $(shell lhapdf-config --libs) -Wl,-rpath=$(LHAPDF_PREFIX)/lib
 
 # RPATH
-rpath_script := ldd `root-config --libdir`/libTreePlayer.so \
-  | sed -n 's/.*=> \(.*\)\/.\+\.so[^ ]* (.*/\1/p' \
-  | sort | uniq \
-  | sed '/^\/lib/d;/^\/usr\/lib/d' \
-  | sed 's/^/-Wl,-rpath=/'
-ROOT_LIBS += $(shell $(rpath_script))
+rpath_script := ldd $(shell root-config --libdir)/libTreePlayer.so \
+  | sed -nr 's|.*=> (.+)/.+\.so[.0-9]* \(.*|\1|p' \
+  | sort -u \
+  | sed -nr '/^(\/usr)?\/lib/!s/^/-Wl,-rpath=/p'
+ROOT_LDLIBS += $(shell $(rpath_script))
 
-FJ_DIR    := $(shell fastjet-config --prefix)
-FJ_CFLAGS := -I$(FJ_DIR)/include
-FJ_LIBS   := -L$(FJ_DIR)/lib -lfastjet -Wl,-rpath=$(FJ_DIR)/lib
+C_check_tree := $(ROOT_CXXFLAGS)
+L_check_tree := $(ROOT_LDLIBS) -lTreePlayer
 
-LHAPDF_DIR    := $(shell fastjet-config --prefix)
-LHAPDF_CFLAGS := $(shell lhapdf-config --cppflags)
-LHAPDF_LIBS   := $(shell lhapdf-config --ldflags) -Wl,-rpath=$(LHAPDF_DIR)/lib
+C_reweigh := $(ROOT_CXXFLAGS)
+L_reweigh := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS) -lboost_program_options
 
-C_check_tree := $(ROOT_CFLAGS)
-L_check_tree := $(ROOT_LIBS) -lTreePlayer
+C_uncert := $(ROOT_CXXFLAGS)
+L_uncert := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS)
 
-C_reweigh := $(ROOT_CFLAGS)
-L_reweigh := $(ROOT_LIBS) $(LHAPDF_LIBS) -lboost_program_options
+C_reweighter := $(ROOT_CXXFLAGS) $(LHAPDF_CXXFLAGS)
 
-C_uncert := $(ROOT_CFLAGS)
-L_uncert := $(ROOT_LIBS) $(LHAPDF_LIBS)
+C_reweigh1 := $(ROOT_CXXFLAGS) $(LHAPDF_CXXFLAGS)
+L_reweigh1 := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS)
 
-C_reweighter := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
+C_reweigh_threaded := $(ROOT_CXXFLAGS) $(LHAPDF_CXXFLAGS)
+L_reweigh_threaded := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS)
 
-C_reweigh1 := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
-L_reweigh1 := $(ROOT_LIBS) $(LHAPDF_LIBS)
+C_dep_scale := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_dep_scale := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS) $(FJ_LDLIBS)
 
-C_reweigh_threaded := $(ROOT_CFLAGS) $(LHAPDF_CFLAGS)
-L_reweigh_threaded := $(ROOT_LIBS) $(LHAPDF_LIBS)
+C_dep_R_scale := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_dep_R_scale := $(ROOT_LDLIBS) $(LHAPDF_LDLIBS) $(FJ_LDLIBS)
 
-C_dep_scale := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_dep_scale := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
-
-C_dep_R_scale := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_dep_R_scale := $(ROOT_LIBS) $(LHAPDF_LIBS) $(FJ_LIBS)
-
-C_hist_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_hist_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+C_hist_Hjets := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_hist_Hjets := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 
 C_hist_Hjets_yy := $(C_hist_Hjets)
 L_hist_Hjets_yy := $(L_hist_Hjets)
@@ -85,55 +79,58 @@ L_hist_example := $(L_hist_Hjets)
 C_njets_test := $(C_hist_Hjets)
 L_njets_test := $(L_hist_Hjets)
 
-C_xsec_Hjets := $(ROOT_CFLAGS) $(FJ_CFLAGS)
-L_xsec_Hjets := $(ROOT_LIBS) -lTreePlayer $(FJ_LIBS)
+C_xsec_Hjets := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_xsec_Hjets := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 
-C_Higgs2diphoton := $(ROOT_CFLAGS)
-C_test_H2AA := $(ROOT_CFLAGS)
-L_test_H2AA := $(ROOT_LIBS)
+C_Higgs2diphoton := $(ROOT_CXXFLAGS)
+C_test_H2AA := $(ROOT_CXXFLAGS)
+L_test_H2AA := $(ROOT_LDLIBS)
 
-C_test_binner := $(ROOT_CFLAGS)
-L_test_binner := $(ROOT_LIBS) -lTreePlayer
+C_test_binner := $(ROOT_CXXFLAGS)
+L_test_binner := $(ROOT_LDLIBS) -lTreePlayer
 
-SRC := src
-BIN := bin
-BLD := .build
+C_unweighted := $(ROOT_CXXFLAGS)
+L_unweighted := $(ROOT_LDLIBS) -lTreePlayer
 
-SRCS := $(shell find $(SRC) -type f -name '*.cc')
-DEPS := $(patsubst $(SRC)%.cc,$(BLD)%.d,$(SRCS))
+C_unweighted2text := $(ROOT_CXXFLAGS)
+L_unweighted2text := $(ROOT_LDLIBS)
 
-GREP_EXES := grep -rl '^[[:blank:]]*int \+main *(' $(SRC)
-EXES := $(patsubst $(SRC)%.cc,$(BIN)%,$(shell $(GREP_EXES)))
+SRCS := $(shell find $(SRC) -type f -name '*$(EXT)')
+DEPS := $(patsubst $(SRC)/%$(EXT),$(BLD)/%.d,$(SRCS))
+
+GREP_EXES := grep -rl '^[[:blank:]]*int \+main *(' $(SRC) --include='*$(EXT)'
+EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 
 HISTS := $(filter $(BIN)/hist_%,$(EXES))
 
-NODEPS := clean
-.PHONY: all clean
-
 all: $(EXES)
-rel: $(EXES)
-
-#Don't create dependencies when we're cleaning, for instance
-ifeq (0, $(words $(findstring $(MAKECMDGOALS), $(NODEPS))))
--include $(DEPS)
-endif
 
 $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale: $(BLD)/reweighter.o
 $(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam $(BIN)/hist_Hjets_yy: \
   $(BLD)/Higgs2diphoton.o
+$(BIN)/unweighted $(BIN)/unweighted2text: $(BLD)/program_options.o
 
-$(DEPS): $(BLD)/%.d: $(SRC)/%.cc | $(BLD)
-	$(CXX) $(DF) -MM -MT '$(@:.d=.o)' $< -MF $@
+-include $(DEPS)
+
+.SECONDEXPANSION:
+
+$(DEPS): $(BLD)/%.d: $(SRC)/%$(EXT) | $(BLD)/$$(dir %)
+	$(CXX) $(CPPFLAGS) -MM -MT '$(@:.d=.o)' $< -MF $@
 
 $(BLD)/%.o: | $(BLD)
-	$(CXX) $(CF) $(C_$*) -DPREFIX="$(PREFIX)" -c $(filter %.cc,$^) -o $@
+	$(CXX) $(CXXFLAGS) $(C_$*) -c $(filter %$(EXT),$^) -o $@
 
-$(EXES): $(BIN)/%: $(BLD)/%.o | $(BIN)
-	$(CXX) $(LF) $(filter %.o,$^) -o $@ $(L_$*)
+$(BIN)/%: $(BLD)/%.o | $(BIN)
+	$(CXX) $(LDFLAGS) $(filter %.o,$^) -o $@ $(LDLIBS) $(L_$*)
 
-$(BLD) $(BIN):
-	mkdir $@
+$(BIN):
+	mkdir -p $@
+
+$(BLD)/%/:
+	mkdir -p $@
+
+endif
 
 clean:
 	@rm -rfv $(BLD) $(BIN)

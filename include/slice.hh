@@ -195,7 +195,7 @@ public:
   }
   template <typename... L>
   inline auto name(const std::tuple<L...>& labels) const noexcept
-  -> name_proxy<remove_rref_t<add_const_to_ref_t<L>>...> {
+  -> name_proxy<rm_rref_t<add_const_to_ref_t<L>>...> {
     return { this, labels };
   }
   // ----------------------------------------------------------------

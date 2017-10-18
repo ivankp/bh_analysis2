@@ -1,0 +1,17 @@
+---
+exe: hist_Hjets
+max_num_events: 0
+num_jobs: 200
+path: /home/ivanp/work/bh_analysis2
+out: /msu/data/t3work2/ivanp/hist/HT1-PDF4LHC15_nlo_30
+database: sql/ntuples.db
+query: >-
+    SELECT particle, njets, part, nentries,
+           ntuples.dir, ntuples.file,
+           weights.dir, weights.file
+    FROM ntuples JOIN weights ON weights.ntuple_id = ntuples.id
+    WHERE energy=13 and particle='H'
+          and scales='HT1' and pdf='PDF4LHC15_nlo_30'
+dset_form: "{}{}j_{}"
+args_form: "\\\nbh {}/{} \\\nw {}/{}"
+args: "{njets}j antikt4 out:{out}/{base}.root"

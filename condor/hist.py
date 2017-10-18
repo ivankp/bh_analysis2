@@ -113,5 +113,5 @@ for g in groups:
     args += ' '+ ' '.join([ args_form.format(*f) for f in g[2] ])
     make_script(script, args)
 
-    # p = Popen((condor_sh,script))
+    p = Popen((condor_sh,script))
 

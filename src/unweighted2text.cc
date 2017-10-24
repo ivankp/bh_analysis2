@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 
 #include <TFile.h>
@@ -27,6 +28,7 @@ int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
   const char *ofname, *tree_name = "events";
   unsigned nevents = 10000;
+  unsigned prec = 15;
 
   try {
     using namespace ivanp::po;
@@ -35,6 +37,7 @@ int main(int argc, char* argv[]) {
       (ofname,'o',"output file name",req())
       (tree_name,"--tree",cat("input TTree name [",tree_name,']'))
       (nevents,'n',cat("number of events [",nevents,']'))
+      (prec,'p',cat("precision [",prec,']'))
       .parse(argc,argv,true)) return 0;
   } catch (const std::exception& e) {
     cerr << e << endl;
@@ -63,6 +66,7 @@ int main(int argc, char* argv[]) {
 
   // Open output file
   std::ofstream f(ofname);
+  f.precision(prec);
 
   // LOOP ===========================================================
   for (timed_counter<Long64_t> ent(nevents); !!ent; ++ent) {

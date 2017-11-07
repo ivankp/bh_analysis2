@@ -312,19 +312,31 @@ int main(int argc, char* argv[]) {
   jjpT_h_(mass)  jjfb_h_(mass)
 
   auto h_H_pT_isp = isp_split<1>(
-    [&](isp_split<1>& hh){ hh.emplace("H_pT",h_H_pT.axis()); });
+    [&](auto& hh){ hh.emplace("H_pT",h_H_pT.axis()); });
 
   auto h_H_y_isp = isp_split<1>(
-    [&](isp_split<1>& hh){ hh.emplace("H_y",h_H_y.axis()); });
+    [&](auto& hh){ hh.emplace("H_y",h_H_y.axis()); });
 
   auto h_jet_pT_isp = isp_split<1>(
-    [&](isp_split<1>& hh, unsigned j){
+    [&](auto& hh, unsigned j){
       hh.emplace( cat("jet",j+1,"_pT"), h_jet_pT[j].axis() );
     }, njmax);
 
   auto h_jet_y_isp = isp_split<1>(
-    [&](isp_split<1>& hh, unsigned j){
+    [&](auto& hh, unsigned j){
       hh.emplace( cat("jet",j+1,"_y"), h_jet_y[j].axis() );
+    }, njmax);
+
+  auto h_Hj_mass_isp = isp_split<1>(
+    [&](auto& hh, unsigned j){
+      const auto name = cat("H",j+1,"j_mass");
+      hh.emplace(name,ra[name]);
+    }, njmax);
+
+  auto h_Hj_mass_isp_zoom = isp_split<1>(
+    [&](auto& hh, unsigned j){
+      const auto name = cat("H",j+1,"j_mass_zoom");
+      hh.emplace(name,ra[name]);
     }, njmax);
 
 #define j_h_(name) \
@@ -546,15 +558,26 @@ int main(int argc, char* argv[]) {
       h_jet_phi [i](jets[i].phi );
       h_jet_mass[i](jets[i].mass);
 
+      static TLorentzVector Hj;
+      if (i==0) Hj = *higgs;
+      Hj += jets[i].p;
+      const auto Hj_mass = Hj.M();
+
       switch (isp) {
-        case gg: h_jet_pT_isp.gg[i].fill_bin(bin_pT);
-                 h_jet_y_isp .gg[i].fill_bin(bin_y);
+        case gg: h_jet_pT_isp .gg[i].fill_bin(bin_pT);
+                 h_jet_y_isp  .gg[i].fill_bin(bin_y);
+                 h_Hj_mass_isp.gg[i].fill(Hj_mass);
+                 h_Hj_mass_isp_zoom.gg[i].fill(Hj_mass);
                  break;
-        case gq: h_jet_pT_isp.gq[i].fill_bin(bin_pT);
-                 h_jet_y_isp .gq[i].fill_bin(bin_y);
+        case gq: h_jet_pT_isp .gq[i].fill_bin(bin_pT);
+                 h_jet_y_isp  .gq[i].fill_bin(bin_y);
+                 h_Hj_mass_isp.gq[i].fill(Hj_mass);
+                 h_Hj_mass_isp_zoom.gq[i].fill(Hj_mass);
                  break;
-        case qq: h_jet_pT_isp.qq[i].fill_bin(bin_pT);
-                 h_jet_y_isp .qq[i].fill_bin(bin_y);
+        case qq: h_jet_pT_isp .qq[i].fill_bin(bin_pT);
+                 h_jet_y_isp  .qq[i].fill_bin(bin_y);
+                 h_Hj_mass_isp.qq[i].fill(Hj_mass);
+                 h_Hj_mass_isp_zoom.qq[i].fill(Hj_mass);
                  break;
         default: ;
       }

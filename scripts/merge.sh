@@ -11,8 +11,7 @@ if [ "$1" == "--all" ]; then
   done
 fi
 
-for name in $(ls | sed -n 's/\(.*\)_\(B\|RS\|I\|V\)_raw\.root$/\1/p' \
-                 | sort | uniq)
+for name in $(ls | sed -n 's/\(.*\)_\(B\|RS\|I\|V\)_raw\.root$/\1/p' | sort -u)
 do
   if [ ! -s "${name}_NLO.root" ]; then
     $merger ${name}_NLO.root ${name}_*_raw.root

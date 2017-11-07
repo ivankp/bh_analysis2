@@ -6,6 +6,11 @@ CXXFLAGS := $(STD) -Wall -O3 -flto -Iinclude -fmax-errors=3
 LDFLAGS := $(STD) -O3 -flto
 LDLIBS :=
 
+ifeq (,${PREFIX})
+PREFIX := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+endif
+CXXFLAGS += -DPREFIX="$(PREFIX)"
+
 SRC := src
 BIN := bin
 BLD := .build
@@ -89,8 +94,8 @@ L_test_H2AA := $(ROOT_LDLIBS)
 C_test_binner := $(ROOT_CXXFLAGS)
 L_test_binner := $(ROOT_LDLIBS) -lTreePlayer
 
-C_unweighted := $(ROOT_CXXFLAGS)
-L_unweighted := $(ROOT_LDLIBS) -lTreePlayer
+C_unweighted := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_unweighted := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 
 C_unweighted2text := $(ROOT_CXXFLAGS)
 L_unweighted2text := $(ROOT_LDLIBS)
@@ -107,8 +112,9 @@ all: $(EXES)
 
 $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale: $(BLD)/reweighter.o
-$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam $(BIN)/hist_Hjets_yy: \
-  $(BLD)/Higgs2diphoton.o
+$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam  \
+$(BIN)/hist_Hjets_yy $(BIN)/unweighted \
+: $(BLD)/Higgs2diphoton.o
 $(BIN)/unweighted $(BIN)/unweighted2text: $(BLD)/program_options.o
 
 -include $(DEPS)

@@ -8,6 +8,10 @@ Higgs2diphoton::Higgs2diphoton()
   phi_dist(0.,2*M_PI), cts_dist(-1.,1.)
 { }
 
+Higgs2diphoton::Higgs2diphoton(seed_type seed)
+: gen(seed), phi_dist(0.,2*M_PI), cts_dist(-1.,1.)
+{ }
+
 std::pair<TLorentzVector,TLorentzVector>
 Higgs2diphoton::operator()(const TLorentzVector& Higgs, bool new_kin) {
   if (new_kin) {

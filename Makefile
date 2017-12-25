@@ -22,7 +22,7 @@ ifeq (0, $(words $(findstring $(MAKECMDGOALS), clean)))
 
 LDFLAGS += $(shell sed -r 's/([^:]+)(:|$$)/ -L\1/g' <<< "$$LIBRARY_PATH")
 
-ROOT_CXXFLAGS := $(shell root-config --cflags)
+ROOT_CXXFLAGS := $(shell root-config --cflags | sed 's/ -std=c++[^ ]\+ / /')
 ROOT_LDLIBS   := $(shell root-config --libs)
 
 FJ_PREFIX   := $(shell fastjet-config --prefix)
@@ -100,6 +100,21 @@ L_unweighted := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 C_unweighted2text := $(ROOT_CXXFLAGS)
 L_unweighted2text := $(ROOT_LDLIBS)
 
+C_hist_Hjets_ang := $(C_hist_Hjets)
+L_hist_Hjets_ang := $(L_hist_Hjets)
+
+C_fit_Hjets_ang := $(ROOT_CXXFLAGS)
+L_fit_Hjets_ang := $(ROOT_LDLIBS)
+
+C_var_Hjets_angles := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS)
+L_var_Hjets_angles := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
+
+C_var_H1j_4mom := $(ROOT_CXXFLAGS)
+L_var_H1j_4mom := $(ROOT_LDLIBS) -lTreePlayer
+
+C_csv_H1j_4mom := $(ROOT_CXXFLAGS)
+L_csv_H1j_4mom := $(ROOT_LDLIBS) -lboost_iostreams
+
 SRCS := $(shell find $(SRC) -type f -name '*$(EXT)')
 DEPS := $(patsubst $(SRC)/%$(EXT),$(BLD)/%.d,$(SRCS))
 
@@ -111,18 +126,27 @@ HISTS := $(filter $(BIN)/hist_%,$(EXES))
 all: $(EXES)
 
 $(HISTS): $(BLD)/re_axes.o
-$(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale: $(BLD)/reweighter.o
+
+$(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale \
+: $(BLD)/reweighter.o
+
 $(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam  \
-$(BIN)/hist_Hjets_yy $(BIN)/unweighted \
+$(BIN)/hist_Hjets_yy $(BIN)/unweighted $(BIN)/hist_Hjets_ang \
+$(BIN)/var_Hjets_angles \
+$(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \
 : $(BLD)/Higgs2diphoton.o
-$(BIN)/unweighted $(BIN)/unweighted2text: $(BLD)/program_options.o
+
+$(BIN)/unweighted $(BIN)/unweighted2text $(BIN)/hist_Hjets_ang \
+$(BIN)/fit_Hjets_ang $(BIN)/var_Hjets_angles \
+$(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \
+: $(BLD)/program_options.o
 
 -include $(DEPS)
 
 .SECONDEXPANSION:
 
 $(DEPS): $(BLD)/%.d: $(SRC)/%$(EXT) | $(BLD)/$$(dir %)
-	$(CXX) $(CPPFLAGS) -MM -MT '$(@:.d=.o)' $< -MF $@
+	$(CXX) $(CPPFLAGS) $(C_$*) -MM -MT '$(@:.d=.o)' $< -MF $@
 
 $(BLD)/%.o: | $(BLD)
 	$(CXX) $(CXXFLAGS) $(C_$*) -c $(filter %$(EXT),$^) -o $@

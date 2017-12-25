@@ -16,6 +16,9 @@ class Higgs2diphoton {
 public:
   Higgs2diphoton();
 
+  using seed_type = typename decltype(gen)::result_type;
+  Higgs2diphoton(seed_type seed);
+
   std::pair<TLorentzVector,TLorentzVector>
   operator()(const TLorentzVector& Higgs, bool new_kin=true);
 };

@@ -8,6 +8,13 @@
 
 namespace ivanp {
 
+template <typename Str, unsigned N>
+inline bool starts_with(const Str& str, const char(&prefix)[N]) {
+  for (unsigned i=0; i<N-1; ++i)
+    if (!str[i] || str[i]!=prefix[i]) return false;
+  return true;
+}
+
 template <size_t N, typename Str>
 std::array<Str,N+1> lsplit(const Str& str, typename Str::value_type delim) {
   std::array<Str,N+1> arr;

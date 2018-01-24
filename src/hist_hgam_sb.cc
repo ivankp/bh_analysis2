@@ -51,7 +51,7 @@ using namespace ivanp::math;
 
 MAKE_ENUM(isp,(any)(gg)(gq)(qq))
 
-isp::type get_isp(Int_t id1, Int_t id2) noexcept {
+isp get_isp(Int_t id1, Int_t id2) noexcept {
   const bool g1 = (id1 == 21), g2 = (id2 == 21);
   if (g1 == g2) return g1 ? isp::gg : isp::qq;
   else return isp::gq;
@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
     if (higgs && n22) throw std::runtime_error("Higgs and photons");
     if (!higgs && n22!=2) throw std::runtime_error("no Higgs or photons");
 
-    isp_bin_t::i = get_isp(*_id1,*_id2);
+    isp_bin_t::i = (unsigned)get_isp(*_id1,*_id2);
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------

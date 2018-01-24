@@ -18,8 +18,8 @@
 // enum_traits<num>::all : std::integer_sequence<num,one,two,tree>
 // enum_traits<num>::str(one) : "one"
 // enum_traits<num>::val("one") : num::one
-// enum_traits<num>::all_str : std::array<const char*,size>
-// enum_traits<num>::all_val : std::array<num,size>
+// enum_traits<num>::all_str() : std::array<const char*,size>
+// enum_traits<num>::all_val() : std::array<num,size>
 
 #ifdef _GLIBCXX_OSTREAM
 #define MAKE_ENUM_OSTREAM_OP(NAME) \

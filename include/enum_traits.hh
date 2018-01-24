@@ -10,6 +10,17 @@
 #include <boost/preprocessor/seq/for_each.hpp>
 #include <boost/preprocessor/seq/transform.hpp>
 
+// MAKE_ENUM(num,(one)(two)(tree))
+//
+// num : enum class num { one, two, three };
+// enum_traits<num>::type : num
+// enum_traits<num>::size : 3
+// enum_traits<num>::all : std::integer_sequence<num,one,two,tree>
+// enum_traits<num>::str(one) : "one"
+// enum_traits<num>::val("one") : num::one
+// enum_traits<num>::all_str : std::array<const char*,size>
+// enum_traits<num>::all_val : std::array<num,size>
+
 #ifdef _GLIBCXX_OSTREAM
 #define MAKE_ENUM_OSTREAM_OP(NAME) \
   std::ostream& operator<<(std::ostream& os, const NAME& val) { \

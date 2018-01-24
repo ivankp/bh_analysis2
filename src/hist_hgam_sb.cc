@@ -1,5 +1,3 @@
-// Written by Ivan Pogrebnyak
-
 #include <iostream>
 #include <cstring>
 #include <algorithm>
@@ -31,6 +29,9 @@
 #include "parse_args.hh"
 #include "nlo_multibin.hh"
 #include "Higgs2diphoton.hh"
+#include "comprehension.hh"
+#include "string_alg.hh"
+#include "enum_traits.hh"
 
 #define TEST(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -48,26 +49,48 @@ using ivanp::reserve;
 namespace fj = fastjet;
 using namespace ivanp::math;
 
-struct Jet {
-  TLorentzVector p;
-  double pT, y, eta, phi, mass;
-  template <typename P>
-  Jet(const P& _p): p(_p[0],_p[1],_p[2],_p[3]),
-    pT(p.Pt()), y(p.Rapidity()), eta(p.Eta()), phi(p.Phi()), mass(p.M())
-  { }
-};
+MAKE_ENUM(isp,(any)(gg)(gq)(qq))
 
-struct dijet {
-  TLorentzVector p;
-  double dpT, dy, deta, dphi, mass;
-  dijet(const Jet& j1, const Jet& j2)
-  : p(j1.p+j2.p),
-    dpT (std::abs(j1.pT -j2.pT )),
-    dy  (std::abs(j1.y  -j2.y  )),
-    deta(std::abs(j1.eta-j2.eta)),
-    dphi(ivanp::math::dphi(j1.phi,j2.phi)),
-    mass(p.M()) {}
+isp::type get_isp(Int_t id1, Int_t id2) noexcept {
+  const bool g1 = (id1 == 21), g2 = (id2 == 21);
+  if (g1 == g2) return g1 ? isp::gg : isp::qq;
+  else return isp::gq;
+}
+
+template <typename Bin> struct isp_bin {
+  std::array<Bin,enum_traits<isp>::size> bins;
+  static unsigned i;
+
+  inline Bin& operator->() noexcept { return bins[i]; }
+  inline const Bin& operator->() const noexcept { return bins[i]; }
+  inline isp_bin& operator+=(double w) noexcept {
+    std::get<0>(bins) += w;
+    bins[i] += w;
+    return *this;
+  }
+  inline isp_bin& operator+=(const isp_bin& b) noexcept {
+    for (auto i=bins.size(); i; ) {
+      --i;
+      bins[i] += b.bins[i];
+    }
+    return *this;
+  }
 };
+template <typename Bin> unsigned isp_bin<Bin>::i;
+
+using isp_bin_t = isp_bin<nlo_bin>;
+using bin_type = nlo_multibin<isp_bin_t>;
+
+template <typename... Axes>
+using hist_t = ivanp::binner<bin_type,
+  std::tuple<ivanp::axis_spec<Axes>...>>;
+template <typename T>
+using hist = hist_t<ivanp::uniform_axis<T>>;
+
+using re_axis = typename re_axes::axis_type;
+template <bool... OF>
+using re_hist = ivanp::binner<bin_type, std::tuple<
+  ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 void excl_labels(TH1* h, bool excl) {
   auto* ax = h->GetXaxis();
@@ -79,26 +102,16 @@ inline bool photon_eta_cut(double abs_eta) noexcept {
   return (1.37 < abs_eta && abs_eta < 1.52) || (2.37 < abs_eta);
 }
 
-template <typename... Axes>
-using hist_t = ivanp::binner<nlo_multibin<>,
-  std::tuple<ivanp::axis_spec<Axes>...>>;
-template <typename T>
-using hist = hist_t<ivanp::uniform_axis<T>>;
-
-using re_axis = typename re_axes::axis_type;
-template <bool... OF>
-using re_hist = ivanp::binner<nlo_multibin<>, std::tuple<
-  ivanp::axis_spec<re_axis,OF,OF>...>>;
-
 int main(int argc, char* argv[]) {
   // parse program arguments ========================================
   std::vector<const char*> ntuples, weights;
   const char* output_file_name = nullptr;
-  const char* bins_file = STR(PREFIX) "/config/Hjets.bins";
+  const char* bins_file = STR(PREFIX) "/config/Hjets_ATLAS.bins";
   const char* tree_name = "t3";
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;
   bool w_arg = false;
+  bool no_photon_cuts = false;
 
   for (int i=1; i<argc; ++i) {
     using namespace parse;
@@ -110,6 +123,10 @@ int main(int argc, char* argv[]) {
     if (bins_file_name(argv[i],bins_file)) continue;
     if (jetdef(argv[i],jet_def)) continue;
     if (parse::tree_name(argv[i],tree_name)) continue;
+    if (!strcmp(argv[i],"--no-photon-cuts")) {
+      no_photon_cuts = true;
+      continue;
+    }
 
     cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
     return 1;
@@ -132,6 +149,7 @@ int main(int argc, char* argv[]) {
 
   const double jet_pt_cut = 30.;
   const double jet_eta_cut = 4.4;
+  const unsigned njmax = need_njets + 1;
 
   cout << "\033[36mBinning\033[0m: " << bins_file << '\n' << endl;
   re_axes ra(bins_file);
@@ -170,11 +188,10 @@ int main(int argc, char* argv[]) {
   float_or_double_array_reader _E (reader,"E" );
 
   boost::optional<TTreeReaderValue<Int_t>> _ncount;
-  // boost::optional<TTreeReaderValue<Char_t>> _part;
   for ( auto bo : *reader.GetTree()->GetListOfBranches() ) {
     if (!strcmp(bo->GetName(),"ncount")) _ncount.emplace(reader,"ncount");
-    // else if (!strcmp(bo->GetName(),"part")) _part.emplace(reader,"part");
   }
+  TTreeReaderValue<Int_t> _id1(reader,"id1"), _id2(reader,"id2");
 
   // handle multiple weights
   std::vector<float_or_double_value_reader> _weights;
@@ -189,51 +206,24 @@ int main(int argc, char* argv[]) {
   nlo_multibin<>::weights.resize(_weights.size());
 
   // Define histograms ==============================================
-  hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
+  hist<int> h_N_j_30({need_njets+2u,0,int(need_njets+2)});
 
-#define a_(name) auto a_##name = ra[#name];
-#define h_(name) re_hist<1> h_##name(#name,ra[#name]);
+#define h_(NAME) re_hist<1> h_##NAME(#NAME,ra[#NAME]);
+#define h2_(X1,X2) re_hist<1,0> h_##X1##_##X2(#X1"-"#X2,ra[#X1"_2"],ra[#X2"_2"]);
 
-  a_(y) a_(phi)
-
-  h_(HT) h_(H_pT) h_(H_y) h_(H_eta) h_(H_phi) h_(H_mass)
-
-  h_(cosTS)
-
-  auto h_jet_pT   = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_y    = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_eta  = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_phi  = reserve<re_hist<1>>(need_njets+1);
-  auto h_jet_mass = reserve<re_hist<1>>(need_njets+1);
-
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_pT");
-    h_jet_pT.emplace_back(name,ra[name]);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_y");
-    h_jet_y.emplace_back(name,a_y);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_eta");
-    h_jet_eta.emplace_back(name,a_y);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_phi");
-    h_jet_phi.emplace_back(name,a_phi);
-  }
-  for (unsigned i=0; i<need_njets+1; ++i) {
-    auto name = cat("jet",i+1,"_mass");
-    h_jet_mass.emplace_back(name,ra[name]);
+#define hj_(NAME) auto h_jet_##NAME = reserve<re_hist<1>>(need_njets+1); \
+  for (unsigned i=0; i<need_njets+1; ++i) { \
+    const auto name = cat(#NAME"_j",i+1); \
+    h_jet_##NAME.emplace_back(name,ra[name]); \
   }
 
-  h_(jjpT_dpT )  h_(jjfb_dpT )
-  h_(jjpT_dy  )  h_(jjfb_dy  )
-  h_(jjpT_deta)  h_(jjfb_deta)
-  h_(jjpT_dphi)  h_(jjfb_dphi)
-  h_(jjpT_mass)  h_(jjfb_mass)
+  h_(m_yy) h_(pT_yy) h_(cosTS_yy) hj_(pT)
 
-  h_(Hjets_mass)
+  h2_(m_yy,pT_yy)
+  h2_(m_yy,pT_j1)
+
+  h2_(dR_yy,pT_yy)
+  h2_(cosTS_yy,pT_yy)
 
   // ================================================================
 
@@ -246,8 +236,9 @@ int main(int argc, char* argv[]) {
        << "\033[0m or more jets per event\n" << endl;
 
   Higgs2diphoton Hdecay;
+  std::pair<TLorentzVector,TLorentzVector> diphoton;
 
-  size_t ncount = 0, num_events = 0, num_selected = 0;
+  size_t ncount = 0, num_events = 0;
 
   // LOOP ===========================================================
   using tc = ivanp::timed_counter<Long64_t>;
@@ -272,14 +263,24 @@ int main(int argc, char* argv[]) {
     boost::optional<TLorentzVector> higgs;
 
     // Read particles -----------------------------------------------
+    unsigned n22 = 0;
     for (size_t i=0; i<np; ++i) {
       if (_kf[i] == 25) {
+        if (higgs) throw std::runtime_error("more than one Higgs");
         higgs.emplace(_px[i],_py[i],_pz[i],_E[i]);
+      } else if (_kf[i] == 22) {
+        if (n22>=2) throw std::runtime_error("more than two photons");
+        (n22 ? diphoton.second : diphoton.first)
+          .SetPxPyPzE(_px[i],_py[i],_pz[i],_E[i]);
+        ++n22;
       } else {
         particles.emplace_back(_px[i],_py[i],_pz[i],_E[i]);
       }
     }
-    if (!higgs) cerr << "\033[31mNo Higgs in entry " << ent <<"\033[0m"<< endl;
+    if (higgs && n22) throw std::runtime_error("Higgs and photons");
+    if (!higgs && n22!=2) throw std::runtime_error("no Higgs or photons");
+
+    isp_bin_t::i = get_isp(*_id1,*_id2);
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------
@@ -297,173 +298,114 @@ int main(int argc, char* argv[]) {
       });
     // resulting number of jets
     const unsigned njets = fj_jets.size();
-    // --------------------------------------------------------------
-
-    // Fill Njets histograms before cuts
-    h_Njets.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
-    // --------------------------------------------------------------
 
     // Cuts ---------------------------------------------------------
-    if (njets < need_njets) continue; // at least needed number of jets
+    if (higgs) diphoton = Hdecay(*higgs,new_id);
+    else higgs = diphoton.first + diphoton.second;
 
-    const double H_mass = higgs->M();
-
-    const auto photons = Hdecay(*higgs,new_id);
-    auto *A1 = &photons.first, *A2 = &photons.second;
+    auto *A1 = &diphoton.first, *A2 = &diphoton.second;
     double A1_pT = A1->Pt(), A2_pT = A2->Pt();
     if (A1_pT < A2_pT) {
       std::swap(A1,A2);
       std::swap(A1_pT,A2_pT);
     }
 
-    if (A1_pT < 0.35*H_mass) continue;
-    if (A2_pT < 0.25*H_mass) continue;
+    const double H_mass = higgs->M();
+    if (!no_photon_cuts) {
+      if (A1_pT < 0.35*H_mass) continue;
+      if (A2_pT < 0.25*H_mass) continue;
+    }
 
     const double A1_eta = A1->Eta();
-    if (photon_eta_cut(std::abs(A1_eta))) continue;
+    if (!no_photon_cuts)
+      if (photon_eta_cut(std::abs(A1_eta))) continue;
     const double A2_eta = A2->Eta();
-    if (photon_eta_cut(std::abs(A2_eta))) continue;
+    if (!no_photon_cuts)
+      if (photon_eta_cut(std::abs(A2_eta))) continue;
 
-    // Define variables ---------------------------------------------
-    const double H_pT = higgs->Pt();
+    h_N_j_30.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
 
-    std::vector<Jet> jets; // compute jet variables
-    jets.reserve(njets);
-    for (const auto& jet : fj_jets) jets.emplace_back(jet);
-
-    double HT = H_pT;
-    TLorentzVector Hjets = *higgs;
-    for (const auto& j : jets) {
-      HT += j.pT;
-      Hjets += j.p;
-    }
-
-    double H_y = higgs->Rapidity();
-    double H_phi = higgs->Phi();
-    // --------------------------------------------------------------
-
-    ++num_selected;
+    if (njets < need_njets) continue; // at least needed number of jets
 
     // Fill histograms ----------------------------------------------
-    h_HT(HT);
-
-    h_H_pT(H_pT);
-    h_H_y(H_y);
-    h_H_eta(higgs->Eta());
-    h_H_phi(H_phi);
-    h_H_mass(H_mass);
-
-    h_cosTS(
+    const double H_pT = higgs->Pt();
+    const auto jets_pT = fj_jets | [](const auto& jet){ return jet.pt(); };
+    const auto cosTS_yy =
       std::sinh(std::abs(A1_eta-A2_eta)) * A1_pT * A2_pT * 2
-      / ( std::sqrt(1.+sq(H_pT/H_mass)) * sq(H_mass) ) );
+      / ( std::sqrt(1.+sq(H_pT/H_mass)) * sq(H_mass) );
 
-    // jet histograms
-    for (unsigned i=0, n=std::min(njets,need_njets+1); i<n; ++i) {
-      h_jet_pT  [i](jets[i].pT  );
-      h_jet_y   [i](jets[i].y   );
-      h_jet_eta [i](jets[i].eta );
-      h_jet_phi [i](jets[i].phi );
-      h_jet_mass[i](jets[i].mass);
+    for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
+      h_jet_pT[i](jets_pT[i]);
     }
 
-    // find maximum rapidity separation in the event
-    double max_dy = std::abs(jets[0].y-H_y);
-    for (unsigned i=1; i<njets; ++i) {
-      for (unsigned j=0; j<i; ++j) {
-        larger(max_dy,std::abs(jets[i].y-jets[j].y));
-      }
-      larger(max_dy,std::abs(jets[i].y-H_y));
-    }
+    h_m_yy(H_mass);
+    h_pT_yy(H_pT);
+    h_cosTS_yy(cosTS_yy);
 
-    // find maximum phi separation in the event
-    double max_dphi = dphi(jets[0].phi,H_phi);
-    for (unsigned i=1; i<njets; ++i) {
-      for (unsigned j=0; j<i; ++j) {
-        larger(max_dphi,dphi(jets[i].phi,jets[j].phi));
-      }
-      larger(max_dphi,dphi(jets[i].phi,H_phi));
-    }
+    h_m_yy_pT_yy(H_mass,H_pT);
+    h_m_yy_pT_j1(H_mass,jets_pT[0]);
 
-    h_Hjets_mass(Hjets.M());
+    h_dR_yy_pT_yy(diphoton.first.DeltaR(diphoton.second),H_pT);
 
-    if (njets<2) continue; // 222222222222222222222222222222222222222
-
-    // Jet pair with highest pT .....................................
-    const dijet jjpT(jets[0],jets[1]);
-
-    h_jjpT_dpT (jjpT.dpT );
-    h_jjpT_dy  (jjpT.dy  );
-    h_jjpT_deta(jjpT.deta);
-    h_jjpT_dphi(jjpT.dphi);
-    h_jjpT_mass(jjpT.mass);
-    // ..............................................................
-
-    // Two most forward-backward jets ...............................
-    unsigned jb = 0, jf = 0;
-    if (njets==2) { jf = 1;
-    } else {
-      for (unsigned j=1; j<njets; ++j) {
-        if (jets[j].y < jets[jb].y) jb = j;
-        if (jets[j].y > jets[jf].y) jf = j;
-      }
-    }
-    const dijet& jjfb = ( (jb==0 && jf==1) || (jb==1 && jf==0)
-      ? jjpT : dijet(jets[jb],jets[jf]) // possibly reuse jjpT
-    );
-
-    h_jjfb_dpT (jjfb.dpT );
-    h_jjfb_dy  (jjfb.dy  );
-    h_jjfb_deta(jjfb.deta);
-    h_jjfb_dphi(jjfb.dphi);
-    h_jjfb_mass(jjfb.mass);
-    // ..............................................................
+    h_cosTS_yy_pT_yy(cosTS_yy,H_pT);
 
   } // END EVENT LOOP
   // ================================================================
 
-  cout << "Selected entries: " << num_selected << endl;
   cout << "Processed events: " << num_events << endl;
   cout << "ncount: " << ncount << '\n' << endl;
 
-  auto h_Njets_integrated = h_Njets;
-  h_Njets_integrated.integrate_left();
-
   // Open output root file for histograms
-  TFile fout(output_file_name,"recreate","hist",209);
-  if (fout.IsZombie()) return 1;
+  auto fout = std::make_unique<TFile>(output_file_name,"recreate");
+  if (fout->IsZombie()) return 1;
+  TDirectory *dir = fout.get();
+
+  auto h_N_j_30_integrated = h_N_j_30;
+  h_N_j_30_integrated.integrate_left();
 
   // write root historgrams
-  nlo_multibin<>::wi = 0;
-  for (const auto& _w : _weights) {
-    auto* dir = fout.mkdir(cat(_w.GetBranchName(),"_Jet",
-        jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
-      : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
-      : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
-      : "", std::setprecision(2), jet_def.R()*10.
-    ).c_str());
-    cout << dir->GetName() << endl;
-    dir->cd();
+  isp_bin_t::i = 0;
+  for (const char* isp_str : enum_traits<isp>::all_str()) {
+    if (isp_bin_t::i) dir = dir->mkdir(isp_str);
+    bin_type::wi = 0;
+    for (const auto& _w : _weights) {
+      dir = dir->mkdir(cat(_w.GetBranchName(),"_Jet",
+          jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
+        : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
+        : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
+        : "", std::setprecision(2), jet_def.R()*10.
+      ).c_str());
+      cout << dir->GetName() << endl;
+      dir->cd();
 
-    using ivanp::root::to_root;
-    using ivanp::root::slice_to_root;
+      using ivanp::root::to_root;
+      using ivanp::root::slice_to_root;
 
-    auto* h_Njets_excl = to_root(h_Njets,"jets_N_excl");
-    excl_labels(h_Njets_excl,true);
-    auto* h_Njets_incl = to_root(h_Njets_integrated,"jets_N_incl");
-    excl_labels(h_Njets_incl,false);
-    h_Njets_incl->SetEntries( h_Njets_excl->GetEntries() );
+      auto* h_N_j_30_excl = to_root(h_N_j_30,"N_j_30_excl");
+      excl_labels(h_N_j_30_excl,true);
+      auto* h_N_j_30_incl = to_root(h_N_j_30_integrated,"N_j_30_incl");
+      h_N_j_30_incl->SetEntries( h_N_j_30_excl->GetEntries() );
+      excl_labels(h_N_j_30_incl,false);
 
-    for (auto& h : re_hist<1>::all) to_root(*h,h.name);
+      for (auto& h : re_hist<1>::all) to_root(*h,h.name);
+      for (auto& h : re_hist<1,0>::all) {
+        const auto vars = ivanp::rsplit<1>(h.name,'-');
+        slice_to_root(*h,vars[0],vars[1]);
+      }
 
-    ++nlo_multibin<>::wi;
+      ++bin_type::wi;
+      dir = dir->GetMotherDir();
+    }
+    if (isp_bin_t::i) dir = dir->GetMotherDir();
+    ++isp_bin_t::i;
   }
 
-  fout.cd();
+  fout->cd();
   TH1D *h_N = new TH1D("N","N",1,0,1);
   h_N->SetBinContent(1,ncount);
   h_N->SetEntries(num_events);
-  fout.Write();
-  cout << "\n\033[32mOutput\033[0m: " << fout.GetName() << endl;
+  fout->Write();
+  cout << "\n\033[32mOutput\033[0m: " << fout->GetName() << endl;
 
   return 0;
 }

@@ -4,7 +4,7 @@ import sys, os, sqlite3
 from subprocess import Popen, PIPE
 from collections import defaultdict
 
-out = '/home/ivanp/work/bh_analysis2/hgam'
+out = '/home/ivanp/work/bh_analysis2/hgam_no_photon_cuts'
 exe = 'hist_hgam'
 chunk_size = 20
 
@@ -39,8 +39,12 @@ def condor(s,i,g):
     base = out + '/condor/' + name
     with open(base+'.sh','w') as f:
         f.write('#!/bin/bash\n')
+        f.write('\n')
+        f.write('export LD_LIBRARY_PATH=/msu/data/t3work3/ivanp/gcc-7.2.0/hep/root-6.10.02/lib:/msu/data/t3work3/ivanp/gcc-7.2.0/hep/lib:/msu/data/t3work3/ivanp/gcc-7.2.0/gcc/lib64:/msu/data/t3work3/ivanp/gcc-7.2.0/gcc/lib:/msu/data/t3work3/ivanp/gcc-7.2.0/lib64:/msu/data/t3work3/ivanp/gcc-7.2.0/lib')
+        f.write('\n')
         f.write(path+'/bin/' + exe + ' {}j '.format(s[1]) +\
-                'out:' + out + '/raw/' + name + '.root \\\n' +\
+                ' --no-photon-cuts' +\
+                ' \\\nout:' + out + '/raw/' + name + '.root \\\n' +\
                 ' \\\n'.join([ 'bh {} w {}'.format(*ff) for ff in g ]))
     os.chmod(base+'.sh',0o775)
     return '''\

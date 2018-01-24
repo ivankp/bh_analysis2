@@ -53,14 +53,14 @@ inline void write(const char* name, Args&&... args) {
 }
 
 template <typename... Axes>
-using hist_t = ivanp::binner<nlo_multibin,
+using hist_t = ivanp::binner<nlo_multibin<>,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<nlo_multibin, std::tuple<
+using re_hist = ivanp::binner<nlo_multibin<>, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 void excl_labels(TH1* h, bool excl) {
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  nlo_multibin::weights.resize(_weights.size());
+  nlo_multibin<>::weights.resize(_weights.size());
 
   // Define histograms ==============================================
 #define h_(NAME) re_hist<1> h_##NAME(#NAME,ra[#NAME]);
@@ -194,14 +194,14 @@ int main(int argc, char* argv[]) {
   using cnt = ivanp::timed_counter<Long64_t>;
   for (cnt ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; nlo_multibin::weights[i] = *_weights[i];
+      --i; nlo_multibin<>::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
-    nlo_multibin::current_id = *_id;
-    const bool new_id = (prev_id != nlo_multibin::current_id);
+    nlo_bin::current_id = *_id;
+    const bool new_id = (prev_id != nlo_bin::current_id);
     if (new_id) {
-      prev_id = nlo_multibin::current_id;
+      prev_id = nlo_bin::current_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
   if (fout.IsZombie()) return 1;
 
   // write root historgrams
-  nlo_multibin::wi = 0;
+  nlo_multibin<>::wi = 0;
   auto mkdir = [&fout, jet_alg = cat("_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
       : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
@@ -313,7 +313,7 @@ int main(int argc, char* argv[]) {
       slice_to_root(*h,vars[0],vars[1]);
     }
 
-    ++nlo_multibin::wi;
+    ++nlo_multibin<>::wi;
   }
 
   fout.cd();

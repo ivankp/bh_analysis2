@@ -50,14 +50,14 @@ namespace fj = fastjet;
 using namespace ivanp::math;
 
 template <typename... Axes>
-using hist_t = ivanp::binner<nlo_multibin,
+using hist_t = ivanp::binner<nlo_multibin<>,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<nlo_multibin, std::tuple<
+using re_hist = ivanp::binner<nlo_multibin<>, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 void excl_labels(TH1* h, bool excl) {
@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  nlo_multibin::weights.resize(_weights.size());
+  nlo_multibin<>::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   hist<int> h_N_j_30({need_njets+2u,0,int(need_njets+2)});
@@ -221,14 +221,14 @@ int main(int argc, char* argv[]) {
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; nlo_multibin::weights[i] = *_weights[i];
+      --i; nlo_multibin<>::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
-    nlo_multibin::current_id = *_id;
-    const bool new_id = (prev_id != nlo_multibin::current_id);
+    nlo_bin::current_id = *_id;
+    const bool new_id = (prev_id != nlo_bin::current_id);
     if (new_id) {
-      prev_id = nlo_multibin::current_id;
+      prev_id = nlo_bin::current_id;
       ncount += ( _ncount ? **_ncount : 1);
       ++num_events;
     }
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
   h_N_j_50_integrated.integrate_left();
 
   // write root historgrams
-  nlo_multibin::wi = 0;
+  nlo_multibin<>::wi = 0;
   for (const auto& _w : _weights) {
     auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -396,7 +396,7 @@ int main(int argc, char* argv[]) {
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-    ++nlo_multibin::wi;
+    ++nlo_multibin<>::wi;
   }
 
   fout->cd();

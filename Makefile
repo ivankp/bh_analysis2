@@ -78,6 +78,9 @@ L_hist_Hjets_isolation := $(L_hist_Hjets)
 C_hist_hgam := $(C_hist_Hjets)
 L_hist_hgam := $(L_hist_Hjets)
 
+C_hist_hgam_sb := $(C_hist_Hjets)
+L_hist_hgam_sb := $(L_hist_Hjets)
+
 C_hist_example := $(C_hist_Hjets)
 L_hist_example := $(L_hist_Hjets)
 
@@ -130,7 +133,8 @@ $(HISTS): $(BLD)/re_axes.o
 $(BIN)/reweigh $(BIN)/dep_scale $(BIN)/dep_R_scale \
 : $(BLD)/reweighter.o
 
-$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation $(BIN)/hist_hgam  \
+$(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation \
+$(BIN)/hist_hgam $(BIN)/hist_hgam_sb \
 $(BIN)/hist_Hjets_yy $(BIN)/unweighted $(BIN)/hist_Hjets_ang \
 $(BIN)/var_Hjets_angles \
 $(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \

@@ -4,27 +4,42 @@
 #include <vector>
 #include "multibin.hh"
 
+struct nlo_bin {
+  int id = 0;
+  static int current_id;
+  double wtmp = 0, w = 0, w2 = 0;
+  inline nlo_bin& operator+=(double weight) noexcept {
+    if (id == current_id) wtmp += weight;
+    else {
+      id = current_id;
+      w2 += wtmp*wtmp;
+      wtmp = weight;
+    }
+    w += weight;
+    return *this;
+  }
+  inline nlo_bin& operator+=(const nlo_bin& b) noexcept {
+    wtmp += b.wtmp;
+    w += b.w;
+    w2 += b.w2;
+    return *this;
+  }
+  inline double sumw2() const noexcept { return w2 + wtmp*wtmp; }
+  inline nlo_bin* operator->() noexcept { return this; }
+  inline const nlo_bin* operator->() const noexcept { return this; }
+};
+int nlo_bin::current_id;
+
+template <typename Bin = nlo_bin>
 struct nlo_multibin: public multibin {
-  struct bin {
-    int id = 0;
-    double wtmp = 0, w = 0, w2 = 0;
-  };
   size_t n = 0;
-  std::vector<bin> bins;
+  std::vector<Bin> bins;
   nlo_multibin(): bins(weights.size()) { }
 
   inline nlo_multibin& operator++() noexcept {
     for (unsigned i=weights.size(); i!=0; ) {
       --i;
-      const double weight = weights[i];
-      bin& b = bins[i];
-      if (b.id == current_id) b.wtmp += weight;
-      else {
-        b.id = current_id;
-        b.w2 += b.wtmp*b.wtmp;
-        b.wtmp = weight;
-      }
-      b.w += weight;
+      bins[i] += weights[i];
     }
     ++n;
     return *this;
@@ -32,33 +47,21 @@ struct nlo_multibin: public multibin {
   inline nlo_multibin& operator+=(const nlo_multibin& rhs) noexcept {
     for (unsigned i=weights.size(); i!=0; ) {
       --i;
-      const bin& br = rhs.bins[i];
-      bin& bl = bins[i];
-      bl.wtmp += br.wtmp;
-      bl.w += br.w;
-      bl.w2 += br.w2;
+      bins[i] += rhs.bins[i];
     }
     n += rhs.n;
     return *this;
   }
+  inline Bin& operator->() noexcept { return bins[wi]; }
+  inline const Bin& operator->() const noexcept { return bins[wi]; }
 };
 
 namespace ivanp { namespace root {
-template <> class bin_converter<nlo_multibin> {
-  inline const auto& get(const nlo_multibin& bin) const noexcept {
-    return bin.bins[nlo_multibin::wi];
-  }
-public:
-  inline auto weight(const nlo_multibin& b) const noexcept {
-    return get(b).w;
-  }
-  inline auto sumw2(const nlo_multibin& b) const noexcept {
-    auto _b = get(b);
-    return _b.w2 + _b.wtmp*_b.wtmp;
-  }
-  inline auto num(const nlo_multibin& b) const noexcept {
-    return b.n;
-  }
+template <typename Bin> struct bin_converter<nlo_multibin<Bin>> {
+  using type = nlo_multibin<Bin>;
+  inline auto weight(const type& b) const noexcept { return b->w; }
+  inline auto sumw2 (const type& b) const noexcept { return b->sumw2(); }
+  inline auto num   (const type& b) const noexcept { return b.n; }
 };
 }}
 

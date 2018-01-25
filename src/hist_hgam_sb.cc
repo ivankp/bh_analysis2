@@ -25,9 +25,9 @@
 #include "exception.hh"
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
+#include "bin_defs.hh"
 #include "re_axes.hh"
 #include "parse_args.hh"
-#include "nlo_multibin.hh"
 #include "Higgs2diphoton.hh"
 #include "comprehension.hh"
 #include "string_alg.hh"
@@ -61,11 +61,9 @@ template <typename Bin> struct isp_bin {
   std::array<Bin,enum_traits<isp>::size> bins;
   static unsigned i;
 
-  inline Bin& operator->() noexcept { return bins[i]; }
-  inline const Bin& operator->() const noexcept { return bins[i]; }
-  inline isp_bin& operator+=(double w) noexcept {
-    std::get<0>(bins) += w;
-    bins[i] += w;
+  inline isp_bin& operator()(double w) noexcept {
+    std::get<0>(bins)(w);
+    bins[i](w);
     return *this;
   }
   inline isp_bin& operator+=(const isp_bin& b) noexcept {
@@ -75,21 +73,23 @@ template <typename Bin> struct isp_bin {
     }
     return *this;
   }
+  inline Bin& operator->() noexcept { return bins[i]; }
+  inline const Bin& operator->() const noexcept { return bins[i]; }
 };
 template <typename Bin> unsigned isp_bin<Bin>::i;
 
 using isp_bin_t = isp_bin<nlo_bin>;
-using bin_type = nlo_multibin<isp_bin_t>;
+using bin_t = multiweight_bin<isp_bin_t>;
 
 template <typename... Axes>
-using hist_t = ivanp::binner<bin_type,
+using hist_t = ivanp::binner<bin_t,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<bin_type, std::tuple<
+using re_hist = ivanp::binner<bin_t, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 void excl_labels(TH1* h, bool excl) {
@@ -203,7 +203,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  nlo_multibin<>::weights.resize(_weights.size());
+  bin_t::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   hist<int> h_N_j_30({need_njets+2u,0,int(need_njets+2)});
@@ -244,7 +244,7 @@ int main(int argc, char* argv[]) {
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; nlo_multibin<>::weights[i] = *_weights[i];
+      --i; bin_t::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
@@ -367,7 +367,7 @@ int main(int argc, char* argv[]) {
   isp_bin_t::i = 0;
   for (const char* isp_str : enum_traits<isp>::all_str()) {
     if (isp_bin_t::i) dir = dir->mkdir(isp_str);
-    bin_type::wi = 0;
+    bin_t::wi = 0;
     for (const auto& _w : _weights) {
       dir = dir->mkdir(cat(_w.GetBranchName(),"_Jet",
           jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -393,7 +393,7 @@ int main(int argc, char* argv[]) {
         slice_to_root(*h,vars[0],vars[1]);
       }
 
-      ++bin_type::wi;
+      ++bin_t::wi;
       dir = dir->GetMotherDir();
     }
     if (isp_bin_t::i) dir = dir->GetMotherDir();

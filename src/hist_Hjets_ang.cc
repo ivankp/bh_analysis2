@@ -24,8 +24,8 @@
 #include "exception.hh"
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
+#include "bin_defs.hh"
 #include "re_axes.hh"
-#include "nlo_multibin.hh"
 #include "Higgs2diphoton.hh"
 #include "comprehension.hh"
 #include "program_options.hh"
@@ -52,15 +52,16 @@ inline void write(const char* name, Args&&... args) {
   TNamed(name,cat(args...).c_str()).Write();
 }
 
+using bin_t = multiweight_bin<nlo_bin>;
 template <typename... Axes>
-using hist_t = ivanp::binner<nlo_multibin<>,
+using hist_t = ivanp::binner<bin_t,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<nlo_multibin<>, std::tuple<
+using re_hist = ivanp::binner<bin_t, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 void excl_labels(TH1* h, bool excl) {
@@ -163,7 +164,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  nlo_multibin<>::weights.resize(_weights.size());
+  bin_t::weights.resize(_weights.size());
 
   // Define histograms ==============================================
 #define h_(NAME) re_hist<1> h_##NAME(#NAME,ra[#NAME]);
@@ -194,7 +195,7 @@ int main(int argc, char* argv[]) {
   using cnt = ivanp::timed_counter<Long64_t>;
   for (cnt ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; nlo_multibin<>::weights[i] = *_weights[i];
+      --i; bin_t::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
@@ -288,7 +289,7 @@ int main(int argc, char* argv[]) {
   if (fout.IsZombie()) return 1;
 
   // write root historgrams
-  nlo_multibin<>::wi = 0;
+  bin_t::wi = 0;
   auto mkdir = [&fout, jet_alg = cat("_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
       : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
@@ -313,7 +314,7 @@ int main(int argc, char* argv[]) {
       slice_to_root(*h,vars[0],vars[1]);
     }
 
-    ++nlo_multibin<>::wi;
+    ++bin_t::wi;
   }
 
   fout.cd();

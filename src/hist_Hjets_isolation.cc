@@ -27,10 +27,9 @@
 #include "exception.hh"
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
+#include "bin_defs.hh"
 #include "re_axes.hh"
 #include "parse_args.hh"
-#include "lo_multibin.hh"
-#include "lo_profile_multibin.hh"
 #include "Higgs2diphoton.hh"
 
 #define test(var) \
@@ -74,18 +73,19 @@ struct dijet {
     mass(p.M()) {}
 };
 
+using bin_t = multiweight_bin<lo_bin>;
 template <typename... Axes>
-using hist_t = ivanp::binner<lo_multibin,
+using hist_t = ivanp::binner<bin_t,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<lo_multibin, std::tuple<
+using re_hist = ivanp::binner<bin_t, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 template <bool... OF>
-using re_prof = ivanp::binner<lo_profile_multibin, std::tuple<
+using re_prof = ivanp::binner<multiweight_bin<profile_bin>, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 int main(int argc, char* argv[]) {
@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,static_cast<const TBranch*>(b)->GetName());
     }
   }
-  lo_multibin::weights.resize(_weights.size());
+  bin_t::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   hist<int> h_Njets({njmax+1u,0,int(njmax+1)});
@@ -250,7 +250,7 @@ int main(int argc, char* argv[]) {
 
   p_(Hjets_mass)
 
-  using hist_dR = ivanp::binner<lo_multibin, std::tuple<
+  using hist_dR = ivanp::binner<bin_t, std::tuple<
     ivanp::axis_spec<re_axis,true,true>,
     ivanp::axis_spec<ivanp::container_axis<std::array<double,3>>,false,true>
     // ivanp::axis_spec<ivanp::container_axis<std::vector<double>>,false,true>
@@ -320,7 +320,7 @@ int main(int argc, char* argv[]) {
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; multibin::weights[i] = *_weights[i];
+      --i; bin_t::weights[i] = *_weights[i];
     }
     ++ncount;
 
@@ -486,7 +486,7 @@ int main(int argc, char* argv[]) {
   h_Njets_integrated.integrate_left();
 
   // write root historgrams
-  multibin::wi = 0;
+  bin_t::wi = 0;
   for (const auto& _w : _weights) {
     auto* dir = fout->mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -512,7 +512,7 @@ int main(int argc, char* argv[]) {
 
     for (auto& h : hist_dR::all) slice_to_root(*h,h.name,"dR");
 
-    ++multibin::wi;
+    ++bin_t::wi;
   }
 
   fout->cd();

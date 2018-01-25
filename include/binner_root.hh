@@ -105,9 +105,9 @@ TH3D* make_TH(const std::string& name, const std::tuple<A1,A2,A3>& axes) {
 
 template <typename Bin>
 struct bin_converter {
-  inline const auto& weight(const Bin& b) const noexcept { return b.w;  }
-  inline const auto&  sumw2(const Bin& b) const noexcept { return b.w2; }
-  inline const auto&    num(const Bin& b) const noexcept { return b.n;  }
+  inline const auto& val (const Bin& b) const noexcept { return b.w;  }
+  inline const auto& err2(const Bin& b) const noexcept { return b.w2; }
+  inline const auto& num (const Bin& b) const noexcept { return b.n;  }
 };
 
 namespace detail {
@@ -117,13 +117,13 @@ class bin_converter_traits {
   template <typename, typename = void>
   struct _has_weight : std::false_type { };
   template <typename T> struct _has_weight<T,
-    void_t<decltype( std::declval<T>().weight(std::declval<Bin>()) )>
+    void_t<decltype( std::declval<T>().val(std::declval<Bin>()) )>
   > : std::true_type { };
 
   template <typename, typename = void>
   struct _has_sumw2 : std::false_type { };
   template <typename T> struct _has_sumw2<T,
-    void_t<decltype( std::declval<T>().sumw2(std::declval<Bin>()) )>
+    void_t<decltype( std::declval<T>().err2(std::declval<Bin>()) )>
   > : std::true_type { };
 
   template <typename, typename = void>
@@ -142,9 +142,9 @@ template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<!Use> set_weight(TH1* h, const Bins& bins, F get) { }
 template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<Use> set_weight(TH1* h, const Bins& bins, F get) {
-  Double_t *weight = dynamic_cast<TArrayD*>(h)->GetArray();
+  Double_t *val = dynamic_cast<TArrayD*>(h)->GetArray();
   size_t i = !Uf;
-  for (const auto& bin : bins) weight[i] = get.weight(bin), ++i;
+  for (const auto& bin : bins) val[i] = get.val(bin), ++i;
 }
 
 template <bool Use, bool Uf, typename Bins, typename F>
@@ -152,9 +152,9 @@ inline std::enable_if_t<!Use> set_sumw2(TH1* h, const Bins& bins, F get) { }
 template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<Use> set_sumw2(TH1* h, const Bins& bins, F get) {
   h->Sumw2();
-  Double_t *sumw2 = h->GetSumw2()->GetArray();
+  Double_t *err2 = h->GetSumw2()->GetArray();
   size_t i = !Uf;
-  for (const auto& bin : bins) sumw2[i] = get.sumw2(bin), ++i;
+  for (const auto& bin : bins) err2[i] = get.err2(bin), ++i;
 }
 
 template <bool Use, typename Bins, typename F>

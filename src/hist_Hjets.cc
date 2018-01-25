@@ -27,9 +27,9 @@
 #include "exception.hh"
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
+#include "bin_defs.hh"
 #include "re_axes.hh"
 #include "parse_args.hh"
-#include "nlo_multibin.hh"
 
 #define TEST(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -68,15 +68,16 @@ struct dijet {
     mass(p.M()) {}
 };
 
+using bin_t = multiweight_bin<nlo_bin>;
 template <typename... Axes>
-using hist_t = ivanp::binner<nlo_multibin<>,
+using hist_t = ivanp::binner<bin_t,
   std::tuple<ivanp::axis_spec<Axes>...>>;
 template <typename T>
 using hist = hist_t<ivanp::uniform_axis<T>>;
 
 using re_axis = typename re_axes::axis_type;
 template <bool... OF>
-using re_hist = ivanp::binner<nlo_multibin<>, std::tuple<
+using re_hist = ivanp::binner<bin_t, std::tuple<
   ivanp::axis_spec<re_axis,OF,OF>...>>;
 
 int main(int argc, char* argv[]) {
@@ -177,7 +178,7 @@ int main(int argc, char* argv[]) {
       _weights.emplace_back(reader,name);
     }
   }
-  nlo_multibin<>::weights.resize(_weights.size());
+  bin_t::weights.resize(_weights.size());
 
   // Define histograms ==============================================
   hist<int> h_Njets({need_njets+2u,0,int(need_njets+2)});
@@ -240,7 +241,7 @@ int main(int argc, char* argv[]) {
   using tc = ivanp::timed_counter<Long64_t>;
   for (tc ent(reader.GetEntries(true)); reader.Next(); ++ent) {
     for (unsigned i=_weights.size(); i!=0; ) { // get weights
-      --i; nlo_multibin<>::weights[i] = *_weights[i];
+      --i; bin_t::weights[i] = *_weights[i];
     }
 
     // Keep track of multi-entry events -----------------------------
@@ -398,7 +399,7 @@ int main(int argc, char* argv[]) {
   if (fout.IsZombie()) return 1;
 
   // write root historgrams
-  nlo_multibin<>::wi = 0;
+  bin_t::wi = 0;
   for (const auto& _w : _weights) {
     auto* dir = fout.mkdir(cat(_w.GetBranchName(),"_Jet",
         jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
@@ -418,7 +419,7 @@ int main(int argc, char* argv[]) {
 
     for (auto& h : re_hist<1>::all) to_root(*h,h.name);
 
-    ++nlo_multibin<>::wi;
+    ++bin_t::wi;
   }
 
   fout.cd();

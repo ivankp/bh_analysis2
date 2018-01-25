@@ -142,7 +142,7 @@ template <> struct bin_converter<profile_bin> {
   inline auto num (const type& b) const noexcept { return b->n; }
 };
 template <> struct bin_converter<multiweight_bin<profile_bin>> {
-  using type = profile_bin;
+  using type = multiweight_bin<profile_bin>;
   inline auto val (const type& b) const noexcept { return b->m; }
   inline auto err2(const type& b) const noexcept { return b->var(); }
   inline auto num (const type& b) const noexcept { return b->n; }

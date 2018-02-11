@@ -4,6 +4,7 @@ CPPFLAGS := $(STD) -Iinclude
 CXXFLAGS := $(STD) -Wall -O3 -flto -Iinclude -fmax-errors=3
 # CXXFLAGS := $(STD) -Wall -g -Iinclude -fmax-errors=3
 LDFLAGS := $(STD) -O3 -flto
+# LDFLAGS :=
 LDLIBS :=
 
 ifeq (,${PREFIX})
@@ -117,6 +118,9 @@ L_var_H1j_4mom := $(ROOT_LDLIBS) -lTreePlayer
 
 C_csv_H1j_4mom := $(ROOT_CXXFLAGS)
 L_csv_H1j_4mom := $(ROOT_LDLIBS) -lboost_iostreams
+
+C_merge_nlo := $(ROOT_CXXFLAGS)
+L_merge_nlo := $(ROOT_LDLIBS)
 
 SRCS := $(shell find $(SRC) -type f -name '*$(EXT)')
 DEPS := $(patsubst $(SRC)/%$(EXT),$(BLD)/%.d,$(SRCS))

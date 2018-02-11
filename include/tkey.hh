@@ -14,7 +14,7 @@ class ROOT_type_error : std::runtime_error {
 
 #ifdef ROOT_TList
 template <typename T>
-class TList_cast {
+class list_cast {
   TList* list;
   using list_iter = decltype(list->begin());
   class iter {
@@ -30,20 +30,20 @@ class TList_cast {
     { return it != r.it; }
   };
 public:
-  TList_cast(TList* list): list(list) { }
+  list_cast(TList* list): list(list) { }
   iter begin() { return list->begin(); }
   iter   end() { return list->  end(); }
 };
 #endif
 
 #ifdef ROOT_TDirectory
-inline TList_cast<TKey> get_keys(TDirectory* dir) noexcept {
+inline list_cast<TKey> get_keys(TDirectory* dir) noexcept {
   return { dir->GetListOfKeys() };
 }
 #endif
 
 template <typename T>
-inline T* read_key(TKey& key) { return static_cast<T*>(key.ReadObj()); }
+inline T* key_cast(TKey& key) { return dynamic_cast<T*>(key.ReadObj()); }
 
 inline const TClass* get_class(const char* name) {
   using namespace std::string_literals;
@@ -53,6 +53,11 @@ inline const TClass* get_class(const char* name) {
 }
 inline const TClass* get_class(const TKey& key) {
   return get_class(key.GetClassName());
+}
+
+template <typename T>
+inline bool inherits_from(const TClass* c) {
+  return c->InheritsFrom(T::Class());
 }
 
 #endif

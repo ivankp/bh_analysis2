@@ -62,7 +62,7 @@ void loop(TDirectory* dir) { // LOOP
 
     if (key_class->InheritsFrom(TH1::Class())) { // HIST
 
-      TH1 *h = read_key<TH1>(key);
+      TH1 *h = key_cast<TH1>(key);
       if (!starts_with(h->GetName(),"H_absCosTheta_Hj_mass")) continue;
 
       info("Fitting", h->GetName());
@@ -71,7 +71,7 @@ void loop(TDirectory* dir) { // LOOP
       TEST( result->MinFcnValue() );
 
     } else if (key_class->InheritsFrom(TDirectory::Class())) { // DIR
-      loop(read_key<TDirectory>(key));
+      loop(key_cast<TDirectory>(key));
     }
   }
 }

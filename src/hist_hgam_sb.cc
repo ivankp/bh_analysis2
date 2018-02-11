@@ -32,6 +32,7 @@
 #include "comprehension.hh"
 #include "string_alg.hh"
 #include "enum_traits.hh"
+#include "category_bin.hh"
 
 #define TEST(var) \
   std::cout <<"\033[36m"<< #var <<"\033[0m"<< " = " << var << std::endl;
@@ -49,7 +50,7 @@ using ivanp::reserve;
 namespace fj = fastjet;
 using namespace ivanp::math;
 
-MAKE_ENUM(isp,(any)(gg)(gq)(qq))
+MAKE_ENUM(isp,(all)(gg)(gq)(qq))
 
 isp get_isp(Int_t id1, Int_t id2) noexcept {
   const bool g1 = (id1 == 21), g2 = (id2 == 21);
@@ -57,40 +58,16 @@ isp get_isp(Int_t id1, Int_t id2) noexcept {
   else return isp::gq;
 }
 
-template <typename Bin> struct isp_bin {
-  std::array<Bin,enum_traits<isp>::size> bins;
-  static unsigned i;
+MAKE_ENUM(photon_cuts,(all)(with_photon_cuts))
 
-  inline isp_bin& operator()(double w) noexcept {
-    std::get<0>(bins)(w);
-    bins[i](w);
-    return *this;
-  }
-  inline isp_bin& operator+=(const isp_bin& b) noexcept {
-    for (auto i=bins.size(); i; ) {
-      --i;
-      bins[i] += b.bins[i];
-    }
-    return *this;
-  }
-  inline Bin& operator->() noexcept { return bins[i]; }
-  inline const Bin& operator->() const noexcept { return bins[i]; }
-};
-template <typename Bin> unsigned isp_bin<Bin>::i;
+auto& wi = multiweight_bin_base::wi;
 
-using isp_bin_t = isp_bin<nlo_bin>;
-using bin_t = multiweight_bin<isp_bin_t>;
+using cat_bin = category_bin<nlo_bin,photon_cuts,isp>;
 
-template <typename... Axes>
-using hist_t = ivanp::binner<bin_t,
-  std::tuple<ivanp::axis_spec<Axes>...>>;
-template <typename T>
-using hist = hist_t<ivanp::uniform_axis<T>>;
-
-using re_axis = typename re_axes::axis_type;
+using bin_t = multiweight_bin<cat_bin>;
 template <bool... OF>
-using re_hist = ivanp::binner<bin_t, std::tuple<
-  ivanp::axis_spec<re_axis,OF,OF>...>>;
+using hist = ivanp::binner<bin_t,
+  std::tuple<ivanp::axis_spec<typename re_axes::axis_type,OF,OF>...> >;
 
 void excl_labels(TH1* h, bool excl) {
   auto* ax = h->GetXaxis();
@@ -102,6 +79,10 @@ inline bool photon_eta_cut(double abs_eta) noexcept {
   return (1.37 < abs_eta && abs_eta < 1.52) || (2.37 < abs_eta);
 }
 
+TLorentzVector operator+(const TLorentzVector& a, const fastjet::PseudoJet& b) {
+  return { a[0]+b[0], a[1]+b[1], a[2]+b[2], a[3]+b[3] };
+}
+
 int main(int argc, char* argv[]) {
   // parse program arguments ========================================
   std::vector<const char*> ntuples, weights;
@@ -111,7 +92,6 @@ int main(int argc, char* argv[]) {
   fj::JetDefinition jet_def;
   unsigned need_njets = 0;
   bool w_arg = false;
-  bool no_photon_cuts = false;
 
   for (int i=1; i<argc; ++i) {
     using namespace parse;
@@ -123,10 +103,6 @@ int main(int argc, char* argv[]) {
     if (bins_file_name(argv[i],bins_file)) continue;
     if (jetdef(argv[i],jet_def)) continue;
     if (parse::tree_name(argv[i],tree_name)) continue;
-    if (!strcmp(argv[i],"--no-photon-cuts")) {
-      no_photon_cuts = true;
-      continue;
-    }
 
     cerr << "\033[31mUnexpected argument:\033[0m " << argv[i] << endl;
     return 1;
@@ -206,24 +182,32 @@ int main(int argc, char* argv[]) {
   bin_t::weights.resize(_weights.size());
 
   // Define histograms ==============================================
-  hist<int> h_N_j_30({need_njets+2u,0,int(need_njets+2)});
+  ivanp::binner<bin_t, std::tuple<ivanp::axis_spec<
+      ivanp::uniform_axis<int>
+    >>> h_N_j_30({need_njets+2u,0,int(need_njets+2)});
 
-#define h_(NAME) re_hist<1> h_##NAME(#NAME,ra[#NAME]);
-#define h2_(X1,X2) re_hist<1,0> h_##X1##_##X2(#X1"-"#X2,ra[#X1"_2"],ra[#X2"_2"]);
+#define h_(NAME) hist<1> h_##NAME(#NAME,ra[#NAME]);
+#define h2_(X1,X2) hist<1,0> h_##X1##_##X2(#X1"-"#X2,ra[#X1"_2"],ra[#X2"_2"]);
 
-#define hj_(NAME) auto h_jet_##NAME = reserve<re_hist<1>>(need_njets+1); \
+#define hj_(NAME) auto h_jet_##NAME = reserve<hist<1>>(need_njets+1); \
   for (unsigned i=0; i<need_njets+1; ++i) { \
     const auto name = cat(#NAME"_j",i+1); \
     h_jet_##NAME.emplace_back(name,ra[name]); \
   }
 
-  h_(m_yy) h_(pT_yy) h_(cosTS_yy) hj_(pT)
+  h_(m_yy) h_(pT_yy)
+  h_(pT_yy_105_160) h_(pT_yy_121_129)
+  hj_(pT)
+  h_(cosTS_yy) h_(cos_y1) h_(cos_y2)
 
   h2_(m_yy,pT_yy)
   h2_(m_yy,pT_j1)
 
   h2_(dR_yy,pT_yy)
   h2_(cosTS_yy,pT_yy)
+  h2_(cos_y1,pT_yy)
+
+  h2_(m_yyj,eta_yy) h2_(m_yyj,eta_j1)
 
   // ================================================================
 
@@ -280,7 +264,7 @@ int main(int argc, char* argv[]) {
     if (higgs && n22) throw std::runtime_error("Higgs and photons");
     if (!higgs && n22!=2) throw std::runtime_error("no Higgs or photons");
 
-    isp_bin_t::i = (unsigned)get_isp(*_id1,*_id2);
+    cat_bin::id<isp>() = (unsigned)get_isp(*_id1,*_id2);
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------
@@ -303,25 +287,25 @@ int main(int argc, char* argv[]) {
     if (higgs) diphoton = Hdecay(*higgs,new_id);
     else higgs = diphoton.first + diphoton.second;
 
-    auto *A1 = &diphoton.first, *A2 = &diphoton.second;
+    TLorentzVector *A1 = &diphoton.first, *A2 = &diphoton.second;
     double A1_pT = A1->Pt(), A2_pT = A2->Pt();
     if (A1_pT < A2_pT) {
       std::swap(A1,A2);
       std::swap(A1_pT,A2_pT);
     }
 
+    bool passes_photon_cuts = true;
+
     const double H_mass = higgs->M();
-    if (!no_photon_cuts) {
-      if (A1_pT < 0.35*H_mass) continue;
-      if (A2_pT < 0.25*H_mass) continue;
-    }
+    if (A1_pT < 0.35*125.) passes_photon_cuts = false;
+    if (A2_pT < 0.25*125.) passes_photon_cuts = false;
 
     const double A1_eta = A1->Eta();
-    if (!no_photon_cuts)
-      if (photon_eta_cut(std::abs(A1_eta))) continue;
     const double A2_eta = A2->Eta();
-    if (!no_photon_cuts)
-      if (photon_eta_cut(std::abs(A2_eta))) continue;
+    if (photon_eta_cut(std::abs(A1_eta))) passes_photon_cuts = false;
+    if (photon_eta_cut(std::abs(A2_eta))) passes_photon_cuts = false;
+
+    cat_bin::id<photon_cuts>() = ( passes_photon_cuts ? 1 : 0 );
 
     h_N_j_30.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
 
@@ -330,9 +314,18 @@ int main(int argc, char* argv[]) {
     // Fill histograms ----------------------------------------------
     const double H_pT = higgs->Pt();
     const auto jets_pT = fj_jets | [](const auto& jet){ return jet.pt(); };
-    const auto cosTS_yy =
+
+    const double cosTS_yy =
       std::sinh(std::abs(A1_eta-A2_eta)) * A1_pT * A2_pT * 2
       / ( std::sqrt(1.+sq(H_pT/H_mass)) * sq(H_mass) );
+
+    TLorentzVector AAf = *higgs, A1f = *A1, A2f = *A2;
+    const auto boost = -AAf.BoostVector();
+    AAf.Boost(boost);
+    A1f.Boost(boost);
+    A2f.Boost(boost);
+    const double A1_cos = std::abs(A1f.CosTheta());
+    const double A2_cos = std::abs(A2f.CosTheta());
 
     for (unsigned i=0, n=std::min(njets,njmax); i<n; ++i) {
       h_jet_pT[i](jets_pT[i]);
@@ -340,7 +333,16 @@ int main(int argc, char* argv[]) {
 
     h_m_yy(H_mass);
     h_pT_yy(H_pT);
+
+    if (105.<H_mass && H_mass<160.) {
+      h_pT_yy_105_160(H_pT);
+      if (121.<H_mass && H_mass<129.)
+        h_pT_yy_121_129(H_pT);
+    }
+
     h_cosTS_yy(cosTS_yy);
+    h_cos_y1(A1_cos);
+    h_cos_y2(A2_cos);
 
     h_m_yy_pT_yy(H_mass,H_pT);
     h_m_yy_pT_j1(H_mass,jets_pT[0]);
@@ -348,6 +350,15 @@ int main(int argc, char* argv[]) {
     h_dR_yy_pT_yy(diphoton.first.DeltaR(diphoton.second),H_pT);
 
     h_cosTS_yy_pT_yy(cosTS_yy,H_pT);
+    h_cos_y1_pT_yy(A1_cos,H_pT);
+
+    const auto Hj = *higgs + fj_jets[0];
+    const double Hj_mass = Hj.M();
+    const double H_eta = higgs->Eta();
+    const double j1_eta = fj_jets[0].eta();
+
+    h_m_yyj_eta_yy(Hj_mass,H_eta);
+    h_m_yyj_eta_j1(Hj_mass,j1_eta);
 
   } // END EVENT LOOP
   // ================================================================
@@ -363,19 +374,30 @@ int main(int argc, char* argv[]) {
   auto h_N_j_30_integrated = h_N_j_30;
   h_N_j_30_integrated.integrate_left();
 
+#define CATEGORY_TOP(NAME) \
+  cat_bin::id<NAME>() = 0; \
+  for (const char* NAME##_str : enum_traits<NAME>::all_str()) { \
+    dir = dir->mkdir(NAME##_str);
+
+#define CATEGORY_BOT(NAME) \
+    dir = dir->GetMotherDir(); \
+    ++cat_bin::id<NAME>(); \
+  }
+
   // write root historgrams
-  isp_bin_t::i = 0;
-  for (const char* isp_str : enum_traits<isp>::all_str()) {
-    if (isp_bin_t::i) dir = dir->mkdir(isp_str);
-    bin_t::wi = 0;
-    for (const auto& _w : _weights) {
-      dir = dir->mkdir(cat(_w.GetBranchName(),"_Jet",
-          jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
-        : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
-        : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
-        : "", std::setprecision(2), jet_def.R()*10.
-      ).c_str());
-      cout << dir->GetName() << endl;
+  wi = 0;
+  for (const auto& _w : _weights) {
+    dir = dir->mkdir(cat(_w.GetBranchName(),"_Jet",
+        jet_def.jet_algorithm() == fj::antikt_algorithm ? "AntiKt"
+      : jet_def.jet_algorithm() == fj::kt_algorithm ? "Kt"
+      : jet_def.jet_algorithm() == fj::cambridge_algorithm ? "CA"
+      : "", std::setprecision(2), jet_def.R()*10.
+    ).c_str());
+    cout << dir->GetName() << endl;
+
+    CATEGORY_TOP(photon_cuts)
+    CATEGORY_TOP(isp)
+
       dir->cd();
 
       using ivanp::root::to_root;
@@ -387,17 +409,17 @@ int main(int argc, char* argv[]) {
       h_N_j_30_incl->SetEntries( h_N_j_30_excl->GetEntries() );
       excl_labels(h_N_j_30_incl,false);
 
-      for (auto& h : re_hist<1>::all) to_root(*h,h.name);
-      for (auto& h : re_hist<1,0>::all) {
+      for (auto& h : hist<1>::all) to_root(*h,h.name);
+      for (auto& h : hist<1,0>::all) {
         const auto vars = ivanp::rsplit<1>(h.name,'-');
         slice_to_root(*h,vars[0],vars[1]);
       }
 
-      ++bin_t::wi;
-      dir = dir->GetMotherDir();
-    }
-    if (isp_bin_t::i) dir = dir->GetMotherDir();
-    ++isp_bin_t::i;
+    CATEGORY_BOT(isp)
+    CATEGORY_BOT(photon_cuts)
+
+    dir = dir->GetMotherDir();
+    ++wi;
   }
 
   fout->cd();

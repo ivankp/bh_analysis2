@@ -7,7 +7,7 @@
 #include <utility>
 #include <cctype>
 
-#include "exception.hh"
+#include "catstr.hh"
 
 struct re_axes::store: public
   std::vector<std::pair<std::regex,axis_type>> { };
@@ -50,7 +50,7 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
         while (isspace(re.back())) re.pop_back();
       }
     } else {
-      if (u && c==':') throw ivanp::exception("more than 1 \':\'");
+      if (u && c==':') throw std::runtime_error("more than 1 \':\'");
       if (c!='}') {
         if (isspace(c)) {
           push_num();
@@ -62,23 +62,28 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
           } else throw ivanp::exception("out of place \':\'");
         } else num_str += c;
       } else {
-        if (u && nums.size()!=3) throw ivanp::exception(
-          "more than 3 arguments for uniform axis");
+        if (u && nums.size()!=3) throw std::runtime_error(ivanp::cat(
+          "more than 3 arguments for uniform axis \"",re,'\"'));
 
         using axis_ptr = ivanp::abstract_axis<double>*;
 
-        _store->emplace_back( std::piecewise_construct,
-          std::make_tuple( std::move(re),
-            std::regex::nosubs | std::regex::optimize | std::regex::extended ),
-          std::make_tuple( u
-            ? static_cast<axis_ptr>(
-                new ivanp::uniform_axis<double,true>(
-                nums[0], nums[1], nums[2]))
-            : static_cast<axis_ptr>(
-                new ivanp::container_axis<std::vector<double>,true>(
-                std::move(nums)))
-          )
-        );
+        try {
+          _store->emplace_back( std::piecewise_construct,
+            std::make_tuple( re, std::regex::nosubs | std::regex::optimize ),
+            std::make_tuple( u
+              ? static_cast<axis_ptr>(
+                  new ivanp::uniform_axis<double,true>(
+                  nums[0], nums[1], nums[2]))
+              : static_cast<axis_ptr>(
+                  new ivanp::container_axis<std::vector<double>,true>(
+                  std::move(nums)))
+            )
+          );
+        } catch (const std::exception& e) {
+          throw std::runtime_error(ivanp::cat(e.what(),
+            " for ", re));
+        }
+        re.clear();
 
         if (u) nums.clear();
 

@@ -2,22 +2,30 @@
 
 #define BINS_FILE "config/Hjets_ang.bins"
 
-MAKE_ENUM(H_eta_cat,(all)(central))
+MAKE_ENUM(H_y_cat,(all)(central))
 
-#define CATEGORIES (H_eta_cat)(photon_cuts)(isp)
+#define CATEGORIES (H_y_cat)(photon_cuts)(isp)
 
 #endif
 #ifdef IMPL_HIST_DEFS // ============================================
 
+h_(H_y)
 h_(H_cosTheta)
 h_(Hj_mass)
 
-h2_(H_absCosTheta,Hj_mass)
+h_(H_absCosTheta,Hj_mass)
+
+#endif
+#ifdef IMPL_CAT // ==================================================
+
+const auto H_y = higgs->Rapidity();
+
+cat_bin::id<H_y_cat>() = ( std::abs(H_y) < 0.1 );
 
 #endif
 #ifdef IMPL_HIST_FILL // ============================================
 
-cat_bin::id<H_eta_cat>() = ( higgs->Eta() > 0.1 );
+h_H_y(H_y);
 
 const TLorentzVector jet1(
   fj_jets.front()[0],
@@ -38,5 +46,10 @@ h_H_cosTheta(cos_theta);
 h_Hj_mass(M);
 
 h_H_absCosTheta_Hj_mass(std::abs(cos_theta),M);
+
+#endif
+#ifdef IMPL_INFO // =================================================
+
+note("central","|H_y| < 0.1");
 
 #endif

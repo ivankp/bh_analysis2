@@ -35,6 +35,8 @@ struct category_bin {
   }
   template <typename _E>
   inline static std::enable_if_t<!std::is_same<_E,E>::value,unsigned>& id() {
+    static_assert( sizeof...(Es),
+      "given enum type does not correspond to a category");
     return bin_type::template id<_E>();
   }
 };

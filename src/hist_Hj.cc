@@ -21,12 +21,11 @@
 #include "float_or_double_reader.hh"
 #include "binner_root.hh"
 #include "bin_defs.hh"
+#include "category_bin.hh"
 #include "re_axes.hh"
 #include "Higgs2diphoton.hh"
 #include "comprehension.hh"
 #include "string_alg.hh"
-#include "enum_traits.hh"
-#include "category_bin.hh"
 #include "program_options.hh"
 #include "parse_args/jetdef.hh"
 #include "tc_msg.hh"
@@ -48,6 +47,11 @@ namespace fj = fastjet;
 namespace tc = termcolor;
 using namespace ivanp::math;
 
+template <typename Name, typename Title>
+inline void note(Name&& name, Title&& title) {
+  TNamed(std::forward<Name>(name),std::forward<Title>(title)).Write();
+}
+
 MAKE_ENUM(isp,(all)(gg)(gq)(qq))
 
 isp get_isp(Int_t id1, Int_t id2) noexcept {
@@ -64,6 +68,7 @@ MAKE_ENUM(photon_cuts,(all)(with_photon_cuts))
 
 #include <boost/preprocessor/seq/enum.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/seq/reverse.hpp>
 
 #ifndef CATEGORIES
 #define CATEGORIES (photon_cuts)(isp)
@@ -110,7 +115,8 @@ int main(int argc, char* argv[]) {
 #ifndef BINS_FILE
       (bfname,'b',"bins file name",req())
 #else
-      (bfname,'b',"bins file name [" BINS_FILE "]",default_init(BINS_FILE))
+      (bfname,'b',"bins file name [" BINS_FILE "]",
+       default_init(STR(PREFIX) "/" BINS_FILE))
 #endif
       (tree_name,"--tree",cat("input TTree name [",tree_name,']'))
       (njets_expected,'j',"expected number of jets",req())
@@ -183,11 +189,16 @@ int main(int argc, char* argv[]) {
 
   // Define histograms ==============================================
   ivanp::binner<bin_t, std::tuple<ivanp::axis_spec<
-      ivanp::uniform_axis<int>
+      ivanp::uniform_axis<int>,0,1
     >>> h_Njets({njets_expected+2u,0,int(njets_expected+2)});
 
-#define h_(X) hist<1> h_##X(#X,ra[#X]);
+#define H_MACRO(_1,_2,_3,NAME,...) NAME
+#define h_(...) H_MACRO(__VA_ARGS__, h3_, h2_, h1_)(__VA_ARGS__)
+
+#define h1_(X) hist<1> h_##X(#X,ra[#X]);
 #define h2_(X1,X2) hist<1,0> h_##X1##_##X2(#X1"-"#X2,ra[#X1"_2"],ra[#X2"_2"]);
+#define h3_(X1,X2,X3) hist<1,0,0> \
+  h_##X1##_##X2##_##X3(#X1"-"#X2"-"#X3,ra[#X1"_2"],ra[#X2"_2"],ra[#X3"_2"]);
 
 #define hj_(X) auto h_jet_##X = reserve<hist<1>>(njets_expected+1); \
   for (unsigned i=0; i<njmax; ++i) { \
@@ -297,7 +308,11 @@ int main(int argc, char* argv[]) {
 
     cat_bin::id<photon_cuts>() = passes_photon_cuts;
 
-    h_Njets.fill_bin(njets+1); // njets+1 because njets==0 is bin 1
+#define IMPL_CAT
+#include STR(IMPL)
+#undef IMPL_CAT
+
+    h_Njets.fill_bin(njets);
 
     if (njets < njets_expected) continue; // at least expected number of jets
 
@@ -337,7 +352,7 @@ int main(int argc, char* argv[]) {
     dir = dir->mkdir(_w.GetBranchName());
     cout << dir->GetName() << endl;
 
-    BOOST_PP_SEQ_FOR_EACH(CATEGORY_TOP, _, CATEGORIES)
+    BOOST_PP_SEQ_FOR_EACH(CATEGORY_TOP,,CATEGORIES)
 
       dir->cd();
 
@@ -356,7 +371,7 @@ int main(int argc, char* argv[]) {
         slice_to_root(*h,vars[0],vars[1]);
       }
 
-    BOOST_PP_SEQ_FOR_EACH(CATEGORY_BOT, _, CATEGORIES)
+    BOOST_PP_SEQ_FOR_EACH(CATEGORY_BOT,,BOOST_PP_SEQ_REVERSE(CATEGORIES))
 
     dir = dir->GetMotherDir();
     ++wi;
@@ -369,17 +384,21 @@ int main(int argc, char* argv[]) {
 
   fout->Write();
 
-  TNamed("FastJet",jet_def.description_no_recombiner()).Write();
-  TNamed("Jet cuts",
-    cat("pT > ",jet_pt_cut," && ","eta < ",jet_eta_cut)).Write();
-  TNamed("Photon cuts",
+  note("FastJet",jet_def.description_no_recombiner());
+  note("Jet cuts",
+    cat("pT > ",jet_pt_cut," && ","eta < ",jet_eta_cut));
+  note("Photon cuts",
     "(eta < 1.37 || 1.52 < eta) && (eta < 2.37)\n"
-    "pT1 > 0.35*mH && pT2 > 0.25*mH").Write();
-  TNamed("Input files",
+    "pT1 > 0.35*mH && pT2 > 0.25*mH");
+  note("Input files",
     std::accumulate(std::next(ntuples.begin()),ntuples.end(),
       std::string(ntuples.front()),
       [](std::string s, const auto& x){ return s + '\n' + x; }
-    ) ).Write();
+    ) );
+
+#define IMPL_INFO
+#include STR(IMPL)
+#undef IMPL_INFO
 
   cout << "\n" << tc::green << "Output" << tc::reset
        << ": " << fout->GetName() << endl;

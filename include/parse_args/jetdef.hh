@@ -17,13 +17,14 @@ bool jetdef(const char* arg,
   ::JetDefinition& def
 ) {
   char c;
-  int i = 0;
+  unsigned i = 0;
   for ( ; (c = arg[i]); ++i)
     if (c=='\0' || !std::isalpha(c)) break;
 
-  auto cmp = [arg,i](const char* str, int len) {
+  auto cmp = [arg,i](const char* str) {
+    const unsigned len = strlen(str);
     if (i!=len) return false;
-    for (int j=0; j<len; ++j)
+    for (unsigned j=0; j<len; ++j)
       if (std::tolower(arg[j]) != str[j]) return false;
     return true;
   };
@@ -38,12 +39,12 @@ bool jetdef(const char* arg,
   JetAlgorithm alg;
 
   if (!std::isdigit(c)) return false;
-  if (cmp("kt",2)) alg = kt_algorithm;
-  else if (cmp("antikt",6) || cmp("akt",3)) alg = antikt_algorithm;
-  else if (cmp("cambridge",9) || cmp("ca",2)) alg = cambridge_algorithm;
+  if (cmp("kt")) alg = kt_algorithm;
+  else if (cmp("antikt") || cmp("akt")) alg = antikt_algorithm;
+  else if (cmp("cambridge") || cmp("ca")) alg = cambridge_algorithm;
   else return false;
 
-  const int r = i;
+  const unsigned r = i;
   for ( ; (c = arg[i]); ++i) {
     if (c=='\0') break;
     if (!std::isdigit(c)) return false;

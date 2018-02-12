@@ -1,3 +1,4 @@
+SHELL = bash
 CXX := g++
 STD := -std=c++14
 CPPFLAGS := $(STD) -Iinclude
@@ -122,13 +123,23 @@ L_csv_H1j_4mom := $(ROOT_LDLIBS) -lboost_iostreams
 C_merge_nlo := $(ROOT_CXXFLAGS)
 L_merge_nlo := $(ROOT_LDLIBS)
 
-SRCS := $(shell find $(SRC) -type f -name '*$(EXT)')
-DEPS := $(patsubst $(SRC)/%$(EXT),$(BLD)/%.d,$(SRCS))
+C_hist_Hj_angular := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS) -DIMPL=hist/angular.hh
+L_hist_Hj_angular := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 
-GREP_EXES := grep -rl '^[[:blank:]]*int \+main *(' $(SRC) --include='*$(EXT)'
+SRCS := $(shell find $(SRC) -type f -name '*$(EXT)' \
+  -not -name 'hist_Hj$(EXT)')
+DEPS := $(SRCS:$(SRC)/%$(EXT)=$(BLD)/%.d)
+
+GREP_EXES := grep -rl '^[[:blank:]]*int \+main *(' $(SRC) \
+  --include='*$(EXT)' --exclude='hist_Hj$(EXT)'
 EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 
 HISTS := $(filter $(BIN)/hist_%,$(EXES))
+
+HISTS2_SUF := $(patsubst include/hist/%.hh,%,$(wildcard include/hist/*.hh))
+DEPS2 := $(HISTS2_SUF:%=$(BLD)/hist_Hj_%.d)
+HISTS2 := $(HISTS2_SUF:%=$(BIN)/hist_Hj_%)
+EXES += $(HISTS2)
 
 all: $(EXES)
 
@@ -149,7 +160,9 @@ $(BIN)/fit_Hjets_ang $(BIN)/var_Hjets_angles \
 $(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \
 : $(BLD)/program_options.o
 
--include $(DEPS)
+$(HISTS2): $(BLD)/re_axes.o $(BLD)/Higgs2diphoton.o $(BLD)/program_options.o
+
+-include $(DEPS) $(DEPS2)
 
 .SECONDEXPANSION:
 
@@ -161,6 +174,9 @@ $(BLD)/%.o: | $(BLD)
 
 $(BIN)/%: $(BLD)/%.o | $(BIN)
 	$(CXX) $(LDFLAGS) $(filter %.o,$^) -o $@ $(LDLIBS) $(L_$*)
+
+$(DEPS2): $(BLD)/hist_Hj_%.d: $(SRC)/hist_Hj$(EXT) include/hist/%.hh | $(BLD)/$$(dir %)
+	$(CXX) $(CPPFLAGS) $(C_$*) -DIMPL=hist/$*.hh -MM -MT '$(@:.d=.o)' $< -MF $@
 
 $(BIN):
 	mkdir -p $@

@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
   h_##X1##_##X2##_##X3(#X1"-"#X2"-"#X3,ra[#X1"_2"],ra[#X2"_2"],ra[#X3"_2"]);
 
 #define hj_(X) auto h_jet_##X = reserve<hist<1>>(njets_expected+1); \
-  for (unsigned i=0; i<njmax; ++i) { \
+  for (unsigned i=0; i<=njets_expected; ++i) { \
     const auto name = cat("jet",i+1,"_"#X); \
     h_jet_##X.emplace_back(name,ra[name]); \
   }
@@ -308,9 +308,9 @@ int main(int argc, char* argv[]) {
 
     cat_bin::id<photon_cuts>() = passes_photon_cuts;
 
-#define IMPL_CAT
+#define IMPL_VARS
 #include STR(IMPL)
-#undef IMPL_CAT
+#undef IMPL_VARS
 
     h_Njets.fill_bin(njets);
 

@@ -126,6 +126,9 @@ L_merge_nlo := $(ROOT_LDLIBS)
 C_hist_Hj_angular := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS) -DIMPL=hist/angular.hh
 L_hist_Hj_angular := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 
+C_hist_Hj_hgam_sb := $(ROOT_CXXFLAGS) $(FJ_CXXFLAGS) -DIMPL=hist/hgam_sb.hh
+L_hist_Hj_hgam_sb := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
+
 SRCS := $(shell find $(SRC) -type f -name '*$(EXT)' \
   -not -name 'hist_Hj$(EXT)')
 DEPS := $(SRCS:$(SRC)/%$(EXT)=$(BLD)/%.d)

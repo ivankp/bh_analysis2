@@ -16,7 +16,7 @@ h_(Hj_mass)
 h_(H_absCosTheta,Hj_mass)
 
 #endif
-#ifdef IMPL_CAT // ==================================================
+#ifdef IMPL_VARS // ==================================================
 
 const auto H_y = higgs->Rapidity();
 

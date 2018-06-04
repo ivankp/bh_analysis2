@@ -8,9 +8,12 @@
 #include <boost/iostreams/filter/bzip2.hpp>
 
 #include <TFile.h>
-#include <TTree.h>
 #include <TChain.h>
+#include <TTreeReader.h>
+#include <TTreeReaderValue.h>
+#include <TTreeReaderArray.h>
 
+#include "float_or_double_reader.hh"
 #include "timed_counter.hh"
 #include "catstr.hh"
 #include "program_options.hh"
@@ -28,22 +31,16 @@ using std::endl;
 namespace tc = termcolor;
 using namespace ivanp;
 
-struct error : std::runtime_error {
-  using std::runtime_error::runtime_error;
-  template <typename... Args>
-  error(const Args&... args): error(cat(args...)) { }
-};
-
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
   const char* ofname = nullptr;
-  const char* tree_name = "Hj";
+  const char* tree_name = "t3";
   unsigned prec = 15;
 
   try {
     using namespace ivanp::po;
     if (program_options()
-      (ifnames,'i',"input ROOT BH ntuples",req(),pos())
+      (ifnames,'i',"input ROOT ntuples",req(),pos())
       (ofname,'o',"output file name",req())
       (tree_name,{"-t","--tree"},cat("input TTree name [",tree_name,']'))
       (prec,'p',cat("precision [",prec,']'))
@@ -63,16 +60,13 @@ int main(int argc, char* argv[]) {
   }
   cout << endl;
 
-  // UChar_t ncount;
-  Double_t weight,
-           px[2], py[2], pz[2], E[2];
-
-  chain.SetBranchAddress("weight",&weight);
-  // chain.SetBranchAddress("ncount",&ncount);
-  chain.SetBranchAddress("px",px);
-  chain.SetBranchAddress("py",py);
-  chain.SetBranchAddress("pz",pz);
-  chain.SetBranchAddress("E" ,E );
+  TTreeReader reader(&chain);
+  TTreeReaderValue<Int_t> nparticle(reader,"nparticle");
+  float_or_double_value_reader weight(reader,"weight2");
+  float_or_double_array_reader px(reader,"px");
+  float_or_double_array_reader py(reader,"py");
+  float_or_double_array_reader pz(reader,"pz");
+  float_or_double_array_reader E (reader,"E" );
 
   // Output file ====================================================
   std::ofstream outf(ofname, std::ios_base::out | std::ios_base::binary);
@@ -82,14 +76,13 @@ int main(int argc, char* argv[]) {
   out << std::scientific << std::setprecision(prec);
 
   // LOOP ===========================================================
-  using cnt = ivanp::timed_counter<Long64_t>;
-  for (cnt ent(chain.GetEntries()); !!ent; ++ent) {
-    chain.GetEntry(ent);
+  using counter = ivanp::timed_counter<Long64_t>;
+  for (counter ent(reader.GetEntries(true)); reader.Next(); ++ent) {
 
-    out << weight << ','
-        // << unsigned(ncount) << ','
-        << E[0] << ',' << px[0] << ',' << py[0] << ',' << pz[0] << ','
-        << E[1] << ',' << px[1] << ',' << py[1] << ',' << pz[1] << '\n';
+    out << *weight;
+    for (auto n=*nparticle, i=0; i<n; ++i)
+      out << ',' << E[i] << ',' << px[i] << ',' << py[i] << ',' << pz[i];
+    out << '\n';
 
   } // END EVENT LOOP
   // ================================================================

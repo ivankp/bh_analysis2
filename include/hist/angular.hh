@@ -1,4 +1,4 @@
-#ifdef IMPL_GLOBAL // ===============================================
+#ifdef HIST_GLOBAL // ===============================================
 
 #define BINS_FILE "config/Hjets_ang.bins"
 
@@ -7,7 +7,7 @@ MAKE_ENUM(H_y_cat,(all)(central))
 #define CATEGORIES (H_y_cat)(photon_cuts)(isp)
 
 #endif
-#ifdef IMPL_HIST_DEFS // ============================================
+#ifdef HIST_DEFS // ============================================
 
 h_(H_y)
 h_(H_cosTheta)
@@ -16,14 +16,14 @@ h_(Hj_mass)
 h_(H_absCosTheta,Hj_mass)
 
 #endif
-#ifdef IMPL_VARS // ==================================================
+#ifdef HIST_VARS // ==================================================
 
 const auto H_y = higgs->Rapidity();
 
 cat_bin::id<H_y_cat>() = ( std::abs(H_y) < 0.1 );
 
 #endif
-#ifdef IMPL_HIST_FILL // ============================================
+#ifdef HIST_FILL // ============================================
 
 h_H_y(H_y);
 
@@ -48,7 +48,7 @@ h_Hj_mass(M);
 h_H_absCosTheta_Hj_mass(std::abs(cos_theta),M);
 
 #endif
-#ifdef IMPL_INFO // =================================================
+#ifdef HIST_INFO // =================================================
 
 note("central","|H_y| < 0.1");
 

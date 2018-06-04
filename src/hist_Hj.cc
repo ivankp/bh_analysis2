@@ -62,13 +62,11 @@ isp get_isp(Int_t id1, Int_t id2) noexcept {
 
 MAKE_ENUM(photon_cuts,(all)(with_photon_cuts))
 
-#define IMPL_GLOBAL
+#define HIST_GLOBAL
 #include STR(IMPL)
-#undef IMPL_GLOBAL
+#undef HIST_GLOBAL
 
-#include <boost/preprocessor/seq/enum.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
-#include <boost/preprocessor/seq/reverse.hpp>
+#include <boost/preprocessor/seq.hpp>
 
 #ifndef CATEGORIES
 #define CATEGORIES (photon_cuts)(isp)
@@ -206,9 +204,9 @@ int main(int argc, char* argv[]) {
     h_jet_##X.emplace_back(name,ra[name]); \
   }
 
-#define IMPL_HIST_DEFS
+#define HIST_DEFS
 #include STR(IMPL)
-#undef IMPL_HIST_DEFS
+#undef HIST_DEFS
 
   // ================================================================
 
@@ -308,9 +306,9 @@ int main(int argc, char* argv[]) {
 
     cat_bin::id<photon_cuts>() = passes_photon_cuts;
 
-#define IMPL_VARS
+#define HIST_VARS
 #include STR(IMPL)
-#undef IMPL_VARS
+#undef HIST_VARS
 
     h_Njets.fill_bin(njets);
 
@@ -318,9 +316,9 @@ int main(int argc, char* argv[]) {
 
     // Fill histograms ----------------------------------------------
 
-#define IMPL_HIST_FILL
+#define HIST_FILL
 #include STR(IMPL)
-#undef IMPL_HIST_FILL
+#undef HIST_FILL
 
   } // END EVENT LOOP
   // ================================================================
@@ -370,6 +368,10 @@ int main(int argc, char* argv[]) {
         const auto vars = ivanp::rsplit<1>(h.name,'-');
         slice_to_root(*h,vars[0],vars[1]);
       }
+      for (auto& h : hist<1,0,0>::all) {
+        const auto vars = ivanp::rsplit<2>(h.name,'-');
+        slice_to_root(*h,vars[0],vars[1],vars[2]);
+      }
 
     BOOST_PP_SEQ_FOR_EACH(CATEGORY_BOT,,BOOST_PP_SEQ_REVERSE(CATEGORIES))
 
@@ -396,9 +398,9 @@ int main(int argc, char* argv[]) {
       [](std::string s, const auto& x){ return s + '\n' + x; }
     ) );
 
-#define IMPL_INFO
+#define HIST_INFO
 #include STR(IMPL)
-#undef IMPL_INFO
+#undef HIST_INFO
 
   cout << "\n" << tc::green << "Output" << tc::reset
        << ": " << fout->GetName() << endl;

@@ -117,8 +117,8 @@ L_var_Hjets_angles := $(ROOT_LDLIBS) -lTreePlayer $(FJ_LDLIBS)
 C_var_H1j_4mom := $(ROOT_CXXFLAGS)
 L_var_H1j_4mom := $(ROOT_LDLIBS) -lTreePlayer
 
-C_csv_H1j_4mom := $(ROOT_CXXFLAGS)
-L_csv_H1j_4mom := $(ROOT_LDLIBS) -lboost_iostreams
+C_csv_4mom := $(ROOT_CXXFLAGS)
+L_csv_4mom := $(ROOT_LDLIBS) -lTreePlayer -lboost_iostreams
 
 C_merge_nlo := $(ROOT_CXXFLAGS)
 L_merge_nlo := $(ROOT_LDLIBS)
@@ -155,12 +155,12 @@ $(BIN)/test_H2AA $(BIN)/hist_Hjets_isolation \
 $(BIN)/hist_hgam $(BIN)/hist_hgam_sb \
 $(BIN)/hist_Hjets_yy $(BIN)/unweighted $(BIN)/hist_Hjets_ang \
 $(BIN)/var_Hjets_angles \
-$(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \
+$(BIN)/var_H1j_4mom $(BIN)/csv_4mom \
 : $(BLD)/Higgs2diphoton.o
 
 $(BIN)/unweighted $(BIN)/unweighted2text $(BIN)/hist_Hjets_ang \
 $(BIN)/fit_Hjets_ang $(BIN)/var_Hjets_angles \
-$(BIN)/var_H1j_4mom $(BIN)/csv_H1j_4mom \
+$(BIN)/var_H1j_4mom $(BIN)/csv_4mom \
 : $(BLD)/program_options.o
 
 $(HISTS2): $(BLD)/re_axes.o $(BLD)/Higgs2diphoton.o $(BLD)/program_options.o

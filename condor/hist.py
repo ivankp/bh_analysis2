@@ -12,7 +12,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 if len(sys.argv) == 1:
     print 'usage: '+sys.argv[0]+' card.yml'
-    sys.exit(0)
+    sys.exit(1)
 
 conf(sys.argv[1])
 
@@ -33,10 +33,11 @@ for f in cur.fetchall():
     if not os.path.isfile(f1):
         print '\033[33mWarning\033[0m: no file {}'.format(f1)
         continue
-    f2 = os.path.join(*ntuple[2:])
-    if not os.path.isfile(f2):
-        print '\033[33mWarning\033[0m: no file {}'.format(f2)
-        continue
+    if (len(ntuple)>2):
+        f2 = os.path.join(*ntuple[2:])
+        if not os.path.isfile(f2):
+            print '\033[33mWarning\033[0m: no file {}'.format(f2)
+            continue
     datasets[dset].add( f[n_dset_form_fields], ntuple )
 
 # form groups of files for condor jobs ==============================
@@ -65,9 +66,9 @@ groups = sorted( [ (k,(i,),g) for k, d in datasets.iteritems()
                    for i, g in enumerate((d.group(group_size), d.gs)[1],1) ],
                  key=lambda g: len(g[2]), reverse=True )
 
-# for g in groups:
-#     print g[0], g[1], len(g[2])
-# print ""
+for g in groups:
+    print g[0], g[1], len(g[2])
+print ""
 
 ng = len(groups)
 while ng<num_jobs:
@@ -87,6 +88,8 @@ while ng<num_jobs:
         i += 1
 # print ng
 # print ""
+
+print groups
 
 groups_d = defaultdict(list)
 for g in groups:

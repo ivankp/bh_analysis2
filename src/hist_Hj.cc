@@ -94,6 +94,9 @@ inline bool photon_eta_cut(double abs_eta) noexcept {
 TLorentzVector operator+(const TLorentzVector& a, const fastjet::PseudoJet& b) {
   return { a[0]+b[0], a[1]+b[1], a[2]+b[2], a[3]+b[3] };
 }
+TLorentzVector& operator+=(TLorentzVector& a, const fastjet::PseudoJet& b) {
+  a[0] += b[0]; a[1] += b[1]; a[2] += b[2]; a[3] += b[3]; return a;
+}
 
 int main(int argc, char* argv[]) {
   // parse program arguments ========================================
@@ -107,19 +110,20 @@ int main(int argc, char* argv[]) {
   try {
     using namespace ivanp::po;
     if (program_options()
-      (ntuples,'i',"input ROOT BH ntuples",req(),pos())
+      (ntuples,'i',"input ROOT BH ntuples",req())
       (weights,'w',"input ROOT weight ntuples")
       (ofname,'o',"output file name",req())
+      (bfname,'b',"bins file name"
 #ifndef BINS_FILE
-      (bfname,'b',"bins file name",req())
+      ,req()
 #else
-      (bfname,'b',"bins file name [" BINS_FILE "]",
-       default_init(STR(PREFIX) "/" BINS_FILE))
+      " [" BINS_FILE "]", default_init(STR(PREFIX) "/" BINS_FILE)
 #endif
+      )
       (tree_name,"--tree",cat("input TTree name [",tree_name,']'))
       (njets_expected,'j',"expected number of jets",req())
       (jet_def,{},"jet clustering algorithm [AntiKt4]",
-       parse::jetdef,default_init(fj::antikt_algorithm,0.4))
+       parse::jetdef,default_init(fj::antikt_algorithm,0.4),pos())
       (jet_pt_cut,"--jet-pt-cut",cat('[',jet_pt_cut,"] GeV"))
       (jet_eta_cut,"--jet-eta-cut",cat('[',jet_eta_cut,']'))
       .parse(argc,argv,true)) return 0;
@@ -267,8 +271,8 @@ int main(int argc, char* argv[]) {
     // --------------------------------------------------------------
 
     // Cluster jets -------------------------------------------------
-    auto fj_jets = fj::ClusterSequence(particles,jet_def) // cluster
-      .inclusive_jets(jet_pt_cut); // apply pT cut
+    auto fj_seq = fj::ClusterSequence(particles,jet_def);
+    auto fj_jets = fj_seq.inclusive_jets(jet_pt_cut); // apply pT cut
     // apply eta cut
     for (auto it=fj_jets.begin(); it!=fj_jets.end(); ) {
       if (std::abs(it->eta()) > jet_eta_cut) fj_jets.erase(it);
@@ -333,6 +337,10 @@ int main(int argc, char* argv[]) {
 
   auto h_Njets_integrated = h_Njets;
   h_Njets_integrated.integrate_left();
+
+#define HIST_POST
+#include STR(IMPL)
+#undef HIST_POST
 
 #define CATEGORY_TOP(r, data, elem) \
   cat_bin::id<elem>() = 0; \

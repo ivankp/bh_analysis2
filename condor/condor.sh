@@ -18,6 +18,7 @@ Executable = $1
 Output     = ${base}.out
 Error      = ${base}.err
 Log        = ${base}.log
++IsLongJob = true
 getenv = True
 Queue
 " | condor_submit - > /dev/null
